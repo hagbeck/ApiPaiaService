@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>PaiaService</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<style type="text/css">
+/* GitHub stylesheet for MarkdownPad (http://markdownpad.com) */
+/* Author: Nicolas Hery - http://nicolashery.com */
+/* Version: b13fe65ca28d2e568c6ed5d7f06581183df8f2ff */
+/* Source: https://github.com/nicolahery/markdownpad-github */
+
+/* RESET
+=============================================================================*/
+
+html, body, div, span, applet, object, iframe, h1, h2, h3, h4, h5, h6, p, blockquote, pre, a, abbr, acronym, address, big, cite, code, del, dfn, em, img, ins, kbd, q, s, samp, small, strike, strong, sub, sup, tt, var, b, u, i, center, dl, dt, dd, ol, ul, li, fieldset, form, label, legend, table, caption, tbody, tfoot, thead, tr, th, td, article, aside, canvas, details, embed, figure, figcaption, footer, header, hgroup, menu, nav, output, ruby, section, summary, time, mark, audio, video {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+/* BODY
+=============================================================================*/
+
+body {
+  font-family: Helvetica, arial, freesans, clean, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #333;
+  background-color: #fff;
+  padding: 20px;
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+body>*:first-child {
+  margin-top: 0 !important;
+}
+
+body>*:last-child {
+  margin-bottom: 0 !important;
+}
+
+/* BLOCKS
+=============================================================================*/
+
+p, blockquote, ul, ol, dl, table, pre {
+  margin: 15px 0;
+}
+
+/* HEADERS
+=============================================================================*/
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 20px 0 10px;
+  padding: 0;
+  font-weight: bold;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1 tt, h1 code, h2 tt, h2 code, h3 tt, h3 code, h4 tt, h4 code, h5 tt, h5 code, h6 tt, h6 code {
+  font-size: inherit;
+}
+
+h1 {
+  font-size: 28px;
+  color: #000;
+}
+
+h2 {
+  font-size: 24px;
+  border-bottom: 1px solid #ccc;
+  color: #000;
+}
+
+h3 {
+  font-size: 18px;
+}
+
+h4 {
+  font-size: 16px;
+}
+
+h5 {
+  font-size: 14px;
+}
+
+h6 {
+  color: #777;
+  font-size: 14px;
+}
+
+body>h2:first-child, body>h1:first-child, body>h1:first-child+h2, body>h3:first-child, body>h4:first-child, body>h5:first-child, body>h6:first-child {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+a:first-child h1, a:first-child h2, a:first-child h3, a:first-child h4, a:first-child h5, a:first-child h6 {
+  margin-top: 0;
+  padding-top: 0;
+}
+
+h1+p, h2+p, h3+p, h4+p, h5+p, h6+p {
+  margin-top: 10px;
+}
+
+/* LINKS
+=============================================================================*/
+
+a {
+  color: #4183C4;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* LISTS
+=============================================================================*/
+
+ul, ol {
+  padding-left: 30px;
+}
+
+ul li > :first-child, 
+ol li > :first-child, 
+ul li ul:first-of-type, 
+ol li ol:first-of-type, 
+ul li ol:first-of-type, 
+ol li ul:first-of-type {
+  margin-top: 0px;
+}
+
+ul ul, ul ol, ol ol, ol ul {
+  margin-bottom: 0;
+}
+
+dl {
+  padding: 0;
+}
+
+dl dt {
+  font-size: 14px;
+  font-weight: bold;
+  font-style: italic;
+  padding: 0;
+  margin: 15px 0 5px;
+}
+
+dl dt:first-child {
+  padding: 0;
+}
+
+dl dt>:first-child {
+  margin-top: 0px;
+}
+
+dl dt>:last-child {
+  margin-bottom: 0px;
+}
+
+dl dd {
+  margin: 0 0 15px;
+  padding: 0 15px;
+}
+
+dl dd>:first-child {
+  margin-top: 0px;
+}
+
+dl dd>:last-child {
+  margin-bottom: 0px;
+}
+
+/* CODE
+=============================================================================*/
+
+pre, code, tt {
+  font-size: 12px;
+  font-family: Consolas, "Liberation Mono", Courier, monospace;
+}
+
+code, tt {
+  margin: 0 0px;
+  padding: 0px 0px;
+  white-space: nowrap;
+  border: 1px solid #eaeaea;
+  background-color: #f8f8f8;
+  border-radius: 3px;
+}
+
+pre>code {
+  margin: 0;
+  padding: 0;
+  white-space: pre;
+  border: none;
+  background: transparent;
+}
+
+pre {
+  background-color: #f8f8f8;
+  border: 1px solid #ccc;
+  font-size: 13px;
+  line-height: 19px;
+  overflow: auto;
+  padding: 6px 10px;
+  border-radius: 3px;
+}
+
+pre code, pre tt {
+  background-color: transparent;
+  border: none;
+}
+
+kbd {
+    -moz-border-bottom-colors: none;
+    -moz-border-left-colors: none;
+    -moz-border-right-colors: none;
+    -moz-border-top-colors: none;
+    background-color: #DDDDDD;
+    background-image: linear-gradient(#F1F1F1, #DDDDDD);
+    background-repeat: repeat-x;
+    border-color: #DDDDDD #CCCCCC #CCCCCC #DDDDDD;
+    border-image: none;
+    border-radius: 2px 2px 2px 2px;
+    border-style: solid;
+    border-width: 1px;
+    font-family: "Helvetica Neue",Helvetica,Arial,sans-serif;
+    line-height: 10px;
+    padding: 1px 4px;
+}
+
+/* QUOTES
+=============================================================================*/
+
+blockquote {
+  border-left: 4px solid #DDD;
+  padding: 0 15px;
+  color: #777;
+}
+
+blockquote>:first-child {
+  margin-top: 0px;
+}
+
+blockquote>:last-child {
+  margin-bottom: 0px;
+}
+
+/* HORIZONTAL RULES
+=============================================================================*/
+
+hr {
+  clear: both;
+  margin: 15px 0;
+  height: 0px;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  border-bottom: 4px solid #ddd;
+  padding: 0;
+}
+
+/* TABLES
+=============================================================================*/
+
+table th {
+  font-weight: bold;
+}
+
+table th, table td {
+  border: 1px solid #ccc;
+  padding: 6px 13px;
+}
+
+table tr {
+  border-top: 1px solid #ccc;
+  background-color: #fff;
+}
+
+table tr:nth-child(2n) {
+  background-color: #f8f8f8;
+}
+
+/* IMAGES
+=============================================================================*/
+
+img {
+  max-width: 70%
+}
+</style>
+</head>
+<body>
+<hr />
+<p><img src="http://www.ub.tu-dortmund.de/images/tu-logo.png" alt="TU Dortmund Logo" /> </p>
+<p><img src="http://www.ub.tu-dortmund.de/images/ub-schriftzug.jpg" alt="UB Dortmund Logo" /></p>
+<hr />
+<h1>API <code>PaiaService</code></h1>
+<p><strong>Autor:</strong> Hans-Georg Becker</p>
+<p><strong>Version:</strong> 03.02.2015 09:42:21 </p>
+<p><strong>Zusammenfassung</strong><br />
+Es handelt sich hierbei um die Dokumentation unserer Implementierung des <strong>Patron Account Information API (PAIA)</strong>. </p>
+<p><strong>Inhaltsverzeichnis:</strong></p>
+<ul>
+<li>
+<a href="#introduction">1 Einführung</a>
+<ul>
+<li><a href="#synopsis">1.1 Synopsis</a> </li>
+<li><a href="#status">1.2 Status dieses Dokuments</a></li>
+<li><a href="#contact">1.3 Ansprechpartner</a> </li>
+</ul>
+</li>
+<li>
+<a href="#generals">2 Grundlagen</a>
+<ul>
+<li><a href="#addons">2.1 Anforderungen TU Dortmund und daraus resultierende Erweiterungen von <code>PAIA</code></a></li>
+<li><a href="#dependencies">2.2 Abhängigkeiten</a></li>
+<li><a href="#applications">2.3 Anwendungen in der TU Dortmund</a></li>
+</ul>
+</li>
+<li>
+<a href="#paiaauth">3 Modul <code>PAIA Auth</code></a>
+<ul>
+<li><a href="#login">3.1 Funktion <code>login</code></a></li>
+<li><a href="#logout">3.2 Funktion <code>logout</code></a></li>
+<li><a href="#change">3.3 Funktion <code>change</code></a></li>
+</ul>
+</li>
+<li>
+<a href="#paiacore">4 Modul <code>PAIA Core</code></a>
+<ul>
+<li><a href="#patron">4.1 Funktion <code>patron</code></a></li>
+<li><a href="#fullpatron">4.2 Funktion <code>fullpatron</code></a></li>
+<li><a href="#items">4.3 Funktion <code>items</code></a></li>
+<li><a href="#request">4.4 Funktion <code>request</code></a></li>
+<li><a href="#renew">4.5 Funktion <code>renew</code></a></li>
+<li><a href="#cancel">4.6 Funktion <code>cancel</code></a></li>
+<li><a href="#fess">4.7 Funktion <code>fees</code></a></li>
+<li><a href="#newfee_deprecated">4.8 Funktion <code>newfee</code></a> <strong>deprecated</strong></li>
+</ul>
+</li>
+</ul>
+<hr />
+<p><img src="http://i.creativecommons.org/l/by/4.0/88x31.png" alt="Creative Commons License" /> </p>
+<p>This work is licensed under a <a href="http://creativecommons.org/licenses/by/4.0/">Creative Commons Attribution 4.0 International License (CC BY 4.0)</a></p>
+<hr />
+<h1>1 Einleitung</h1>
+<h2>1.1 Synopsis</h2>
+<h2>1.2 Status dieses Dokuments</h2>
+<p><strong>Verwendete Version der PAIA-Spezifikation:</strong> </p>
+<ul>
+<li>&quot;PaiaService&quot; Version 0.9: <a href="https://gbv.github.io/paia/paia-96ce9cb.html">PAIA Version 2013-11-20 (version 1.0.1)</a></li>
+<li>&quot;PaiaService&quot; Version 0.8: <a href="http://gbv.github.io/paia/paia-3853fb0.html">PAIA Version 2013-07-17 09:34:52 +0200</a></li>
+</ul>
+<p><strong>Historie &quot;PaiaService&quot;:</strong></p>
+<ul>
+<li>
+<strong>[next]</strong> &quot;PaiaService&quot; Version 1.0:
+<ul>
+<li>erfolgreich abgeschlossener Test im Anwendungsfall mit den ITMC der TU Dortmund</li>
+</ul>
+</li>
+<li>
+&quot;PaiaService&quot; Version 0.9.2:
+<ul>
+<li>Kontrolle des Codes im Hinblick auf &quot;Open Source&quot;</li>
+<li>Update auf Jetty 9.2.5</li>
+<li>Lizenz des Quellcodes: MIT</li>
+</ul>
+</li>
+<li>
+&quot;PaiaService&quot; Version 0.9.1:
+<ul>
+<li>in <code>fullpatron</code> wurde aus <code>bgr</code> jetzt <code>usergroup</code>; damit wurde das Datenschema mit <code>PAAA</code> kompatibel</li>
+<li>die <code>usergroup</code> wird jetzt auch bei <code>patron</code> unterstützt</li>
+<li>in <code>items</code> wurden die Felder <code>recalled</code> und <code>renewable</code> ergänzt.</li>
+<li>Vorbereitungen für PAIA auth change; Code auskommentiert</li>
+<li>Erweiterungen in PAIA core items</li>
+<li>Erweiterungen und Korrekturen in PAIA core fees</li>
+<li>Response-Header angepasst (Scopes)</li>
+</ul>
+</li>
+<li>
+&quot;PaiaService&quot; Version 0.9:
+<ul>
+<li><code>PAIAcore:newfee</code> <strong>deprecated</strong></li>
+<li>
+Verwende PAIA 1.0.1
+<ul>
+<li>Implementiere insbesondere <code>suppress_response_codes</code> (siehe <a href="http://gbv.github.io/paia/paia.html#special-request-parameters">PAIA 2.2 Special request parameters</a>) </li>
+</ul>
+</li>
+</ul>
+</li>
+<li>&quot;PaiaService&quot; Version 0.8:</li>
+</ul>
+<h2>1.3 Ansprechpartner</h2>
+<p>Dipl.-Math. <strong>Hans-Georg Becker</strong> (M.L.I.S.)</p>
+<p>Bibliotheks-IT / Informationssysteme und Datenmanagement<br />
+Fachreferat Informatik</p>
+<p>Technische Universität Dortmund<br />
+Universitätsbibliothek<br />
+Vogelpothsweg 76<br />
+44227 Dortmund  </p>
+<p>Tel. : +49 231-755 40 36<br />
+Fax : +49 231-755 40 32<br />
+<a href="&#x6d;&#x61;i&#108;&#116;&#111;&#58;&#x68;&#x61;&#110;&#x73;&#45;&#103;&#101;&#111;&#x72;&#103;.&#x62;&#101;&#x63;&#107;&#x65;&#x72;&#x40;&#x74;&#117;&#45;&#100;&#x6f;&#x72;&#116;m&#117;&#110;&#100;&#46;&#x64;&#x65;">&#x68;&#x61;&#x6e;s&#x2d;g&#101;&#x6f;&#114;&#x67;&#46;&#98;&#101;&#x63;&#x6b;&#101;&#114;&#64;&#116;&#x75;&#45;&#x64;&#111;&#x72;&#116;&#x6d;&#117;&#x6e;&#x64;&#46;&#100;&#x65;</a></p>
+<hr />
+<h1>2 Grundlagen</h1>
+<h2>2.1 Anforderungen innerhalb der TU Dortmund und daraus resultierende Erweiterungen von <code>PAIA</code></h2>
+<p>Die UB Dortmund benötigt einen nach aussen vom Bibliothekssystem (ILS) unabhängigen Service für Kontofunktionen aus Nutzersicht. Zu diesen zählen: </p>
+<ul>
+<li>Abrufen von Informationen zu ausgeliehenen Medien</li>
+<li>Abrufen von Informationen zu bestellten bzw. vorgemerkten Medien</li>
+<li>Anzeige von offenen Gebühren</li>
+<li>Aufgeben und Stornieren von Bestellungen bzw Vormerkungen</li>
+<li>Verlängerung von Ausleihfristen</li>
+</ul>
+<p>Die Notwendigkeit für einen solchen Service ergibt sich aus einer Vielzahl von neuen vernetzten Dienstleistungen innerhalb der TU Dortmund.</p>
+<p>Zentrales Szenario ist die Einbindung der Kontofunktion für Nutzende in das neue Recherchesystem der UB Dortmund <a href="http://www.ub.tu-dortmund.de/katalog/">Katalog plus</a>. In Kombination mit der Frage nach der Ermittlung von Live-Informationen zur Verfügbarkeit von Medien in der UB Dortmund, ergab sich die Möglichkeit mit <a href="https://gbv.github.io/daiaspec/daia.html">DAIA</a> und <a href="https://gbv.github.io/paia/paia.html">PAIA</a> diese Aufgabe zu erfüllen.</p>
+<p>Für einige spezielle Funktionen wurde die originale PAIA-Spezifikation erweitert.</p>
+<p>Die Authentifizierungs- und Autorisierungsfunktionen werden mittels OAuth 2.0 realisiert. Eine Implementierung über das ILS steht mit dem <a href="https://api.ub.tu-dortmund.de/oauth/"><code>OAuth2Service</code></a>.</p>
+<h2>2.2 Abhängigkeiten</h2>
+<ul>
+<li>Jackson 1.9.11 als JSON-Library auf JAXB-Basis</li>
+<li>
+Apache Commons:
+<ul>
+<li>Codec</li>
+<li>HttpClient</li>
+<li>Logging 1.1.1</li>
+</ul>
+</li>
+<li>Apache Log4j 1.2.15</li>
+<li>Apache Oltu 0.22</li>
+<li>Jetty 9.2.5</li>
+<li><a href="http://api.ub.tu-dortmund.de/oauth/">OAuth2Service</a> der UB Dortmund für die Authentifizierung und Autorisierung</li>
+<li>
+OCLC SunRise
+<ul>
+<li>Sybase JDBC Library</li>
+<li>XSLNPClient V4.2</li>
+</ul>
+</li>
+</ul>
+<h2>2.3 Anwendungen in der TU Dortmund</h2>
+<ul>
+<li>Kontofunktionen in &quot;Katalog plus&quot;</li>
+<li>
+Anwendung im TU-Serviceportal des ITMC
+<ul>
+<li>Kontoanzeige</li>
+<li>Verlängerung der Ausleihe, Stornierung von Bestellungen</li>
+</ul>
+</li>
+<li>Anwendung der Funktion <code>patron</code> für das Antragsformular zur Förderung von Opan Access-Publikationen</li>
+</ul>
+<hr />
+<h1>3 Modul <code>PAIA Auth</code></h1>
+<p><code>PAIA Auth</code> ist ein Ressource Server im Sinne von OAuth 2.0. Der Zugriff auf diese Ressourcen erfolgt nach dem OAuth 2.0-Konzept. Dier hier implementierten Funktionen sind als Alternativen zum Prinzip der Weiterleitungen beim Authentifizierungs- und Autorisierung-Workflow anzusehen.</p>
+<h2>3.1 Funktion <code>login</code></h2>
+<p><strong>noch nicht implementiert</strong></p>
+<h2>3.2 Funktion <code>logout</code></h2>
+<p><strong>noch nicht implementiert</strong></p>
+<h2>3.3 Funktion <code>change</code></h2>
+<p><strong>noch nicht implementiert</strong></p>
+<hr />
+<h1>4 Modul <code>PAIA Core</code></h1>
+<p><code>PAIA Core</code> ist ein Ressource Server im Sinne von OAuth 2.0. Der Zugriff auf diese Ressourcen erfolgt nach dem OAuth 2.0-Konzept. </p>
+<h2>4.1 Funktion <code>patron</code></h2>
+<p><strong>Ziel</strong><br />
+Diese Funktion ermöglicht es, Informationen aus einem Benutzerkonto zu ermitteln. </p>
+<p><strong>HTTP verb and URL</strong><br />
+GET https://api.ub.tu-dortmund.de/paia/core/<strong>{account}</strong></p>
+<p><strong>Scope</strong><br />
+read_patron</p>
+<p><strong>Felder &quot;Response&quot;</strong></p>
+<ul>
+<li><code>name</code> = vollständiger Name</li>
+<li><code>email</code> = E-Mail-Adresse</li>
+<li><code>usergroup</code> = Benutzergruppe</li>
+<li><code>faculty</code> = Fakultät</li>
+<li><code>expires</code> = Ablaufdatum der aktuellen Nutzungsfrist</li>
+<li><code>status</code> = aktueller Kontostatus</li>
+</ul>
+<p>Kontostatus:</p>
+<ul>
+<li>0 = aktiv und keine Sperre</li>
+<li>1 = nicht aktiv</li>
+<li>2 = nicht aktiv, weil Gültigkeitszeitraum abgelaufen (enthält auch SunRise-Sperre 99)</li>
+<li>3 = nicht aktiv: bitte im Ausleihzentrum der UB nachfragen</li>
+</ul>
+<p><strong>Beispiel:</strong></p>
+<pre><code>GET /paia/core/ubtest05/patron HTTP/1.1
+Host: api.ub.tu-dortmund.de
+Accept: application/json
+Authorization: Bearer a0dedc54bbfae4b
+
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+X-Accepted-OAuth-Scopes: read_patron
+X-OAuth-Scopes: read_patron, read_fees, read_items, write_items
+
+{
+  &quot;name&quot;: &quot;UB-TEST-05, UB-TEST-05&quot;, 
+  &quot;email&quot;: &quot;jane@example.org&quot;,
+  &quot;usergroup&quot;: &quot;25&quot;,
+  &quot;faculty&quot;: &quot;4&quot;,
+  &quot;expires&quot;: &quot;2015-05-18&quot;,
+  &quot;status&quot;: 0
+}
+</code></pre>
+
+<h2>4.2 Funktion <code>fullpatron</code></h2>
+<p><strong>Ziel</strong><br />
+Diese Funktion ermöglicht es, detailierte Informationen aus einem Benutzerkonto zu ermitteln und dient der Überprüfung nach der Durchführung administrativer Funktionen via <a href="http://api.ub.tu-dortmund.de/paaa/"><code>PaaaService</code></a>. Diese Funktion ist nur verfügbar, falls für den Anfragenden der Scope <code>write_patron</code> freigeschaltet ist.</p>
+<p><strong>HTTP verb and URL</strong><br />
+GET https://api.ub.tu-dortmund.de/paia/core/<strong>{account}</strong>/fullpatron</p>
+<p><strong>Scope</strong><br />
+write_patron</p>
+<p><strong>Felder &quot;Response&quot;</strong></p>
+<ul>
+<li><code>name</code> = vollständiger Name</li>
+<li><code>email</code> = E-Mail-Adresse</li>
+<li><code>expires</code> = Ablaufdatum der aktuellen Nutzungsfrist</li>
+<li><code>status</code> = aktueller Kontostatus</li>
+<li><code>gender</code> = Geschlecht (1 = männlich, 2 = weiblich)</li>
+<li><code>dateofbirth</code> = Geburtsdatum (yyyy-mm-dd)</li>
+<li><code>city</code> = Stadt</li>
+<li><code>postalcode</code> = Postleitzahl</li>
+<li><code>street</code> = Straße</li>
+<li><code>usergroup</code> = Benutzergruppe (25 = TU-Mitarbeiter, 30 = TU-Studierende, 35 = UA Ruhr-Studierende)</li>
+<li><code>externalid</code> = Matrikelnummer oder Personalnummer</li>
+<li><code>faculty</code> = Fakultät</li>
+</ul>
+<p>Kontostatus:</p>
+<ul>
+<li>0 = aktiv und keine Sperre</li>
+<li>1 = nicht aktiv</li>
+<li>2 = nicht aktiv, weil Gültigkeitszeitraum abgelaufen (enthält auch SunRise-Sperre 99 = &quot;zur Löschung &quot;)</li>
+<li>3 = nicht aktiv: bitte im Ausleihzentrum der UB nachfragen</li>
+</ul>
+<p><strong>Beispiel:</strong></p>
+<pre><code>GET /paia/core/19026118/fullpatron HTTP/1.1
+Host: api.ub.tu-dortmund.de
+Accept: application/json
+Authorization: Bearer a0dedc54bbfae4b
+
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+X-Accepted-OAuth-Scopes: read_patron
+X-OAuth-Scopes: write_patron
+
+{
+   &quot;name&quot;: &quot;Bond, James&quot;,
+   &quot;email&quot;: &quot;agent@queen.uk.co&quot;,
+   &quot;expires&quot;: &quot;2015-03-12&quot;,
+   &quot;status&quot;: 2,
+   &quot;gender&quot;: &quot;1&quot;,
+   &quot;dateofbirth&quot;: &quot;1946-08-12&quot;,
+   &quot;city&quot;: &quot;London&quot;,
+   &quot;postalcode&quot;: &quot;54321&quot;,
+   &quot;street&quot;: &quot;Royal Street 1&quot;,
+   &quot;usergroup&quot;: &quot;35&quot;,
+   &quot;externalid&quot;: &quot;123456789X&quot;,
+   &quot;faculty&quot;: &quot;4&quot;
+}
+</code></pre>
+
+<h2>4.3 Funktion <code>items</code></h2>
+<p><strong>Ziel</strong><br />
+Diese Funktion liefert alle ausgeliehenen, vorgemerkten und bestellten Titel in einem Benutzerkonto.
+Die erfolgreiche Antwort dieser Funktion ist um zwei Felder gegenüberder PAIA-Spezifikation erweitert:</p>
+<ul>
+<li><code>recalled</code> = <code>boolean</code> - gibt an, ob ein Medium bereits zurückgefordert wurde</li>
+<li><code>renewable</code> = <code>boolean</code> - gibt an, ob die Ausleihe eines Mediums generell verlängert werden kann</li>
+</ul>
+<p><strong>HTTP verb and URL</strong><br />
+GET https://api.ub.tu-dortmund.de/paia/core/<strong>{account}</strong>/items</p>
+<p><strong>Scope</strong><br />
+read_items</p>
+<p><strong>Felder &quot;Response&quot;</strong></p>
+<ul>
+<li><code>doc</code> = Liste von Dokumenten</li>
+</ul>
+<p><strong>Beispiel:</strong></p>
+<pre><code>GET /paia/core/19026118/items HTTP/1.1
+Host: api.ub.tu-dortmund.de
+Accept: application/json
+Authorization: Bearer a0dedc54bbfae4b
+
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+X-Accepted-OAuth-Scopes: read_items
+X-OAuth-Scopes: read_patron, read_fees, read_items, write_items
+
+{
+    &quot;doc&quot;: [
+        {
+            &quot;status&quot;: 1,
+            &quot;item&quot;: &quot;http://www.ub.tu-dortmund.de/katalog/exemplar/10499400&quot;,
+            &quot;edition&quot;: &quot;http://www.ub.tu-dortmund.de/katalog/titel/415281&quot;,
+            &quot;about&quot;: &quot;Kahle, Egbert: Produktion&quot;,
+            &quot;label&quot;: &quot;720/Kahl&quot;,
+            &quot;queue&quot;: 0,
+            &quot;renewals&quot;: 0,
+            &quot;reminder&quot;: 0,
+            &quot;cancancel&quot;: true,
+            &quot;canrenew&quot;: false,
+            &quot;starttime&quot;: &quot;2014-03-28&quot;,
+            &quot;endtime&quot;: &quot;----------&quot;,
+            &quot;duedate&quot;: &quot;----------&quot;,
+            &quot;storage&quot;: &quot;Zentralbibliothek&quot;,
+            &quot;storage_id&quot;: &quot;http://data.ub.tu-dortmund.de/open/resource/library/290/0&quot;,
+            &quot;recalled&quot;: false,
+            &quot;renewable&quot;: false
+        }
+    ]
+}
+</code></pre>
+
+<h2>4.4 Funktion <code>request</code></h2>
+<p><strong>todo</strong></p>
+<h2>4.5 Funktion <code>renew</code></h2>
+<p><strong>todo</strong></p>
+<h2>4.6 Funktion <code>cancel</code></h2>
+<p><strong>todo</strong></p>
+<h2>4.7 Funktion <code>fees</code></h2>
+<p><strong>Ziel</strong><br />
+Diese Funktion liefert alle noch ausstehenden Gebühren in einem Benutzerkonto.</p>
+<p><strong>HTTP verb and URL</strong><br />
+GET https://api.ub.tu-dortmund.de/paia/core/<strong>{account}</strong>/fees</p>
+<p><strong>Scope</strong><br />
+read_fees</p>
+<p><strong>Felder &quot;Response&quot;</strong></p>
+<ul>
+<li><code>doc</code> = Liste von Dokumenten</li>
+</ul>
+<p><strong>Beispiel:</strong></p>
+<pre><code>GET /paia/core/19026118/fees HTTP/1.1
+Host: api.ub.tu-dortmund.de
+Accept: application/json
+Authorization: Bearer a0dedc54bbfae4b
+
+HTTP/1.1 200 OK
+Content-Type: application/json; charset=utf-8
+X-Accepted-OAuth-Scopes: read_fees
+X-OAuth-Scopes: read_patron, read_fees, read_items, write_items
+
+{
+    &quot;amount&quot;: &quot;3.00 EUR&quot;,
+    &quot;fee&quot;: [
+        {
+            &quot;amount&quot;: &quot;3.00 EUR&quot;,
+            &quot;date&quot;: &quot;2014-10-10&quot;,
+            &quot;about&quot;: &quot;Unicard-Ersatzgebühr&quot;,
+            &quot;item&quot;: &quot;http://www.ub.tu-dortmund.de/fees/Unicard-Ersatzgebühr&quot;,
+            &quot;edition&quot;: &quot;http://www.ub.tu-dortmund.de/fees/Unicard-Ersatzgebühr&quot;,
+            &quot;feetype&quot;: &quot;Unicard-Ersatzgebühr&quot;,
+            &quot;feeid&quot;: &quot;128 / 4&quot;
+        }
+    ]
+}
+</code></pre>
+
+<h2>4.8 Funktion <code>newfee</code></h2>
+<p><strong>deprecated:</strong> Wird in Release v1.0 durch <code>newfee</code> im <a href="https://api.ub.tu-dortmund.de/paaa/"><code>PaaaService</code></a> ersetzt!</p>
+<p><strong>Ziel</strong><br />
+Diese Funktion ermöglicht es, Gebühren zu buchen. Für den Datentyp <code>money</code> siehe <a href="http://gbv.github.io/paia/paia.html#data-types">PAIA 2.5 Data types</a></p>
+<p>Es kann mit einem Funktionsaufruf eine Gebührenbuchung übergeben werden. Im Fehlerfall wird definitiv keine Position gebucht.</p>
+<p><strong>HTTP verb and URL</strong><br />
+POST https://api.ub.tu-dortmund.de/paia/core/<strong>{account}</strong>/newfee </p>
+<p><strong>Scope</strong><br />
+write_fees </p>
+<p><strong>Felder</strong></p>
+<ul>
+<li>(*) <code>account</code> = Uni-Account via URL</li>
+<li>
+<code>fee</code> = <code>Fee</code>
+<ul>
+<li><code>amount</code> = Betrag. Für den Datentyp <code>money</code> siehe <a href="http://gbv.github.io/paia/paia.html#data-types">PAIA 2.5 Data types</a></li>
+<li><code>about</code> = Gebührengrund</li>
+<li><code>reason</code> = Code des Gebührengrundes (4 oder 04 für &quot;Unicard-Ersatzgebühr&quot;)</li>
+</ul>
+</li>
+</ul>
+<p>(*) = Pflichtfeld</p>
+<p><strong>Beispiel:</strong></p>
+<pre><code>POST /paaa/BondJamesBond/newfee
+Host: api.ub.tu-dortmund.de
+Accept: application/json
+Authorization: Bearer a0dedc54bbfae4b
+
+Content-Type: application/json
+Content-Length: 108
+
+{
+    &quot;amount&quot;: &quot;3.00 EUR&quot;,
+    &quot;about&quot;: &quot;Unicard-Ersatzgebühr&quot;,
+    &quot;reason&quot;: &quot;4&quot;,
+}
+</code></pre>
+
+<p><strong>Response:</strong></p>
+<pre><code>{&quot;success&quot;:&quot;true&quot;}
+</code></pre>
+
+<p><strong>Fehler:</strong></p>
+<ul>
+<li><code>errorcode</code> = string 	Reason for error, code</li>
+<li><code>errortext</code> = string 	Reason for error, text </li>
+</ul>
+<p>Codes:</p>
+<ul>
+<li>570 = unknown patron</li>
+<li>571 = patron blocked </li>
+</ul>
+<p>Beispiele:</p>
+<pre><code>{&quot;success&quot;:&quot;false&quot;,&quot;errorcode&quot;:&quot;570&quot;,&quot;errortext&quot;:&quot;unknown patron&quot;}
+{&quot;success&quot;:&quot;false&quot;,&quot;errorcode&quot;:&quot;571&quot;,&quot;errortext&quot;:&quot;patron blocked&quot;}
+{&quot;success&quot;:&quot;true&quot;}
+</code></pre>
+
+
+</body>
+</html>
+<!-- This document was created with MarkdownPad, the Markdown editor for Windows (http://markdownpad.com) -->

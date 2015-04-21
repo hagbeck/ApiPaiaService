@@ -246,10 +246,10 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
             // Json für Response body
             RequestError requestError = new RequestError();
-            requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED)));
+            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED)));
             requestError.setCode(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
-            requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
-            requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
+            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
+            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
 
             StringWriter json = new StringWriter();
             mapper.writeValue(json, requestError);
@@ -365,10 +365,10 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
             // Json für Response body
             RequestError requestError = new RequestError();
-            requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED)));
+            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED)));
             requestError.setCode(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
-            requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
-            requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
+            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
+            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
 
             StringWriter json = new StringWriter();
             mapper.writeValue(json, requestError);
@@ -1372,10 +1372,10 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                     // Json für Response body
                     RequestError requestError = new RequestError();
-                    requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_NOT_FOUND)));
+                    requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_FOUND)));
                     requestError.setCode(HttpServletResponse.SC_NOT_FOUND);
-                    requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_NOT_FOUND) + ".description"));
-                    requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_NOT_FOUND) + ".uri"));
+                    requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_FOUND) + ".description"));
+                    requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_FOUND) + ".uri"));
 
                     mapper.writeValue(json, requestError);
                     this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
@@ -1400,10 +1400,10 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                     // Json für Response body
                     RequestError requestError = new RequestError();
-                    requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                    requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
                     requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-                    requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
-                    requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+                    requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                    requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
                     mapper.writeValue(json, requestError);
                     this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
@@ -1437,10 +1437,10 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
             // Json für Response body
             RequestError requestError = new RequestError();
-            requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
             requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-            requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
-            requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
             StringWriter json = new StringWriter();
             mapper.writeValue(json, requestError);

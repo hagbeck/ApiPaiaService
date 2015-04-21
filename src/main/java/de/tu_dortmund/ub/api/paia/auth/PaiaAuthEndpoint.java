@@ -218,10 +218,10 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
             // Json für Response body
             RequestError requestError = new RequestError();
-            requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED)));
+            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED)));
             requestError.setCode(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
-            requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
-            requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
+            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
+            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
 
             StringWriter json = new StringWriter();
             mapper.writeValue(json, requestError);
@@ -398,10 +398,10 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                 // Json für Response body
                 RequestError requestError = new RequestError();
-                requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_BAD_REQUEST)));
+                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST)));
                 requestError.setCode(HttpServletResponse.SC_BAD_REQUEST);
-                requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".description"));
-                requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".uri"));
+                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".description"));
+                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".uri"));
 
                 StringWriter json = new StringWriter();
                 mapper.writeValue(json, requestError);
@@ -490,10 +490,10 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                 // Json für Response body
                 RequestError requestError = new RequestError();
-                requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
+                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
                 requestError.setCode(HttpServletResponse.SC_FORBIDDEN);
-                requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
-                requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
+                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
+                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
 
                 StringWriter json = new StringWriter();
                 mapper.writeValue(json, requestError);
@@ -555,10 +555,10 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                 // Json für Response body
                 RequestError requestError = new RequestError();
-                requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
+                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
                 requestError.setCode(HttpServletResponse.SC_FORBIDDEN);
-                requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
-                requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
+                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
+                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
 
                 StringWriter json = new StringWriter();
                 mapper.writeValue(json, requestError);
@@ -588,10 +588,10 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                 // Json für Response body
                 RequestError requestError = new RequestError();
-                requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
+                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
                 requestError.setCode(HttpServletResponse.SC_FORBIDDEN);
-                requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
-                requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
+                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
+                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
 
                 StringWriter json = new StringWriter();
                 mapper.writeValue(json, requestError);

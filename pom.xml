@@ -150,6 +150,13 @@
             <version>${dependency.version.oclc.sybase}</version>
         </dependency>
 
+        <!-- UB DO dependencies -->
+        <dependency>
+            <groupId>de.tu_dortmund.ub.util</groupId>
+            <artifactId>ManageCryptedApiKeyFile</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+
     </dependencies>
 
     <build>

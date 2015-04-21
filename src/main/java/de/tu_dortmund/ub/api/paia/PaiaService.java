@@ -26,6 +26,7 @@ package de.tu_dortmund.ub.api.paia;
 
 import de.tu_dortmund.ub.api.paia.auth.PaiaAuthEndpoint;
 import de.tu_dortmund.ub.api.paia.core.PaiaCoreEndpoint;
+import de.tu_dortmund.ub.util.AEScrypter;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import org.eclipse.jetty.server.Server;
@@ -35,6 +36,7 @@ import org.eclipse.jetty.servlet.ServletHolder;
 
 import java.io.*;
 import java.util.Properties;
+import java.util.Scanner;
 
 public class PaiaService {
 
@@ -77,6 +79,44 @@ public class PaiaService {
         logger.info("[" + config.getProperty("service.name") + "] " + "conf-file = " + conffile);
         logger.info("[" + config.getProperty("service.name") + "] " + "log4j-conf-file = " + config.getProperty("service.log4j-conf"));
 
+        Properties apikeys = null;
+
+        if (config.getProperty("service.auth.apikeys") != null && !config.getProperty("service.auth.apikeys").equals("")) {
+
+            try {
+                // TODO alternative Lösung, da für automatischen Neustart keine Eingabe möglich!
+                Scanner scanner = new Scanner(System.in);
+                System.out.println("Password for Api-Key support: ");
+                String password = scanner.nextLine();
+
+                BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(config.getProperty("service.auth.apikeys")), "UTF-8"));
+
+                String decryptedApiKeys = "";
+                String line = "";
+
+                while ((line = in.readLine()) != null) {
+
+                    decryptedApiKeys += line.trim();
+                }
+
+                in.close();
+
+                AEScrypter aesCrypter = new AEScrypter(password);
+                String encryptedApiKeys = aesCrypter.AEStoString(decryptedApiKeys);
+
+                apikeys = new Properties();
+                apikeys.load(new StringReader(encryptedApiKeys));
+            }
+            catch (Exception e) {
+
+                logger.warn("[" + config.getProperty("service.name") + "] " + "Api-Keys not supported! Could not read key file!");
+            }
+        }
+        else {
+
+            logger.info("[" + config.getProperty("service.name") + "] " + "Api-Keys not supported!");
+        }
+
         // server
         Server server = new Server(Integer.parseInt(config.getProperty("service.port")));
 
@@ -91,7 +131,7 @@ public class PaiaService {
 
         context.addServlet(new ServletHolder(new PaiaAuthEndpoint(conffile)), config.getProperty("service.endpoint.auth") + "/*");
 
-        context.addServlet(new ServletHolder(new PaiaCoreEndpoint(conffile)), config.getProperty("service.endpoint.core") + "/*");
+        context.addServlet(new ServletHolder(new PaiaCoreEndpoint(conffile, apikeys)), config.getProperty("service.endpoint.core") + "/*");
 
         server.start();
         server.join();

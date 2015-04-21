@@ -33,12 +33,10 @@ import de.tu_dortmund.ub.api.paia.model.DocumentList;
 import de.tu_dortmund.ub.api.paia.model.FeeList;
 import de.tu_dortmund.ub.api.paia.model.RequestError;
 import de.tu_dortmund.ub.util.impl.Lookup;
-import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
 import org.apache.oltu.oauth2.client.OAuthClient;
 import org.apache.oltu.oauth2.client.URLConnectionClient;
 import org.apache.oltu.oauth2.client.request.OAuthClientRequest;
@@ -71,6 +69,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
     private String conffile  = "";
     private Properties config = new Properties();
     private Logger logger = Logger.getLogger(PaiaCoreEndpoint.class.getName());
+    private Properties apikeys;
 
     /**
      *
@@ -78,7 +77,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
      */
     public PaiaCoreEndpoint() throws IOException {
 
-        this("conf/paia.properties");
+        this("conf/paia.properties", null);
     }
 
     /**
@@ -86,7 +85,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
      * @param conffile
      * @throws IOException
      */
-    public PaiaCoreEndpoint(String conffile) throws IOException {
+    public PaiaCoreEndpoint(String conffile, Properties apikeys) throws IOException {
 
         this.conffile = conffile;
 
@@ -98,7 +97,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream, "UTF-8"));
 
                 try {
-                    config.load(reader);
+                    this.config.load(reader);
 
                 } finally {
                     reader.close();
@@ -113,11 +112,13 @@ public class PaiaCoreEndpoint extends HttpServlet {
         }
 
         // init logger
-        PropertyConfigurator.configure(config.getProperty("service.log4j-conf"));
+        PropertyConfigurator.configure(this.config.getProperty("service.log4j-conf"));
 
-        logger.info("[" + config.getProperty("service.name") + "] " + "Starting 'PAIA Core Endpoint' ...");
-        logger.info("[" + config.getProperty("service.name") + "] " + "conf-file = " + conffile);
-        logger.info("[" + config.getProperty("service.name") + "] " + "log4j-conf-file = " + config.getProperty("service.log4j-conf"));
+        this.logger.info("[" + this.config.getProperty("service.name") + "] " + "Starting 'PAIA Core Endpoint' ...");
+        this.logger.info("[" + this.config.getProperty("service.name") + "] " + "conf-file = " + conffile);
+        this.logger.info("[" + this.config.getProperty("service.name") + "] " + "log4j-conf-file = " + this.config.getProperty("service.log4j-conf"));
+
+        this.apikeys = apikeys;
     }
 
     /**
@@ -455,18 +456,34 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 break;
             }
         }
+
         CloseableHttpClient httpclient = HttpClients.createDefault();
-
-        String url = this.config.getProperty("oauth2.tokenendpoint") + "/" + access_token + "?scope=" + scope;
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "TOKEN-ENDPOINT-URL: " + url);
-        HttpGet httpGet = new HttpGet(url);
-
-        CloseableHttpResponse httpResponse = httpclient.execute(httpGet);
+        CloseableHttpResponse httpResponse = null;
 
         try {
 
-            int statusCode = httpResponse.getStatusLine().getStatusCode();
-            HttpEntity httpEntity = httpResponse.getEntity();
+            int statusCode = -1;
+
+            if (this.config.getProperty("service.auth.ubdo.tokenendpoint") != null && !this.config.getProperty("service.auth.ubdo.tokenendpoint").equals("")) {
+
+                String url = this.config.getProperty("service.auth.ubdo.tokenendpoint") + "/" + access_token + "?scope=" + scope;
+                this.logger.debug("[" + config.getProperty("service.name") + "] " + "TOKEN-ENDPOINT-URL: " + url);
+                HttpGet httpGet = new HttpGet(url);
+
+                try {
+
+                    httpResponse = httpclient.execute(httpGet);
+                    statusCode = httpResponse.getStatusLine().getStatusCode();
+                }
+                catch (Exception e) {
+
+                    statusCode = HttpServletResponse.SC_SERVICE_UNAVAILABLE;
+                }
+            }
+            else {
+
+                statusCode = HttpServletResponse.SC_FORBIDDEN;
+            }
 
             switch (statusCode) {
 
@@ -480,35 +497,44 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 }
                 case HttpServletResponse.SC_FORBIDDEN: {
 
-                    this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_FORBIDDEN + "!");
+                    if (apikeys != null && apikeys.containsKey(access_token) && apikeys.getProperty(access_token).contains(scope)) {
 
-                    httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-                    httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-                    httpServletResponse.setContentType("application/json");
-                    httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+                        this.logger.debug("[" + config.getProperty("service.name") + "] " + "PaiaService." + service + " kann ausgeführt werden!");
 
-                    // Error handling mit suppress_response_codes=true
-                    if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                        this.paiaCore(httpServletRequest, httpServletResponse, patronid, access_token, scope, service, documents);
                     }
-                    // Error handling mit suppress_response_codes=false (=default)
                     else {
-                        httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
+
+                        this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_FORBIDDEN + "!");
+
+                        httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
+                        httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
+                        httpServletResponse.setContentType("application/json");
+                        httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+
+                        // Error handling mit suppress_response_codes=true
+                        if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                        }
+                        // Error handling mit suppress_response_codes=false (=default)
+                        else {
+                            httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        }
+
+                        // Json für Response body
+                        RequestError requestError = new RequestError();
+                        requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
+                        requestError.setCode(HttpServletResponse.SC_FORBIDDEN);
+                        requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
+                        requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
+
+                        StringWriter json = new StringWriter();
+                        mapper.writeValue(json, requestError);
+                        this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+
+                        // send response
+                        httpServletResponse.getWriter().println(json);
                     }
-
-                    // Json für Response body
-                    RequestError requestError = new RequestError();
-                    requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
-                    requestError.setCode(HttpServletResponse.SC_FORBIDDEN);
-                    requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
-                    requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
-
-                    StringWriter json = new StringWriter();
-                    mapper.writeValue(json, requestError);
-                    this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
-
-                    // send response
-                    httpServletResponse.getWriter().println(json);
 
                     break;
                 }
@@ -532,10 +558,10 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                     // Json für Response body
                     RequestError requestError = new RequestError();
-                    requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
-                    requestError.setCode(HttpServletResponse.SC_FORBIDDEN);
-                    requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
-                    requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+                    requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                    requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                    requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                    requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
                     StringWriter json = new StringWriter();
                     mapper.writeValue(json, requestError);
@@ -545,11 +571,13 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     httpServletResponse.getWriter().println(json);
                 }
             }
+        }
+        finally {
 
-            EntityUtils.consume(httpEntity);
+            if (httpResponse !=null) {
 
-        } finally {
-            httpResponse.close();
+                httpResponse.close();
+            }
         }
     }
 
@@ -565,9 +593,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
         ObjectMapper mapper = new ObjectMapper();
 
-        String oAuthzService = this.config.getProperty("oauth2.authzendpoint");
-        String client_id = this.config.getProperty("service.client_id.core");
-        String client_secret = this.config.getProperty("service.client_secret.core");
+        String oAuthzService = this.config.getProperty("service.auth.ubdo.authzendpoint");
+        String client_id = this.config.getProperty("service.auth.ubdo.client_id.core");
+        String client_secret = this.config.getProperty("service.auth.ubdo.client_secret.core");
         String function = "/";
         if (patronid.equals("")) {
             function += service;
@@ -636,10 +664,10 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                 // Json für Response body
                 RequestError requestError = new RequestError();
-                requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
+                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
                 requestError.setCode(HttpServletResponse.SC_FORBIDDEN);
-                requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
-                requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
+                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
+                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
 
                 StringWriter json = new StringWriter();
                 mapper.writeValue(json, requestError);
@@ -705,10 +733,10 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                 // Json für Response body
                 RequestError requestError = new RequestError();
-                requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
+                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
                 requestError.setCode(HttpServletResponse.SC_FORBIDDEN);
-                requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
-                requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
+                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
+                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
 
                 StringWriter json = new StringWriter();
                 mapper.writeValue(json, requestError);

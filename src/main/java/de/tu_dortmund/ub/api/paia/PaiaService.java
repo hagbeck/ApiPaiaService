@@ -81,13 +81,10 @@ public class PaiaService {
 
         Properties apikeys = null;
 
-        if (config.getProperty("service.auth.apikeys") != null && !config.getProperty("service.auth.apikeys").equals("")) {
+        if (config.getProperty("service.id") != null && !config.getProperty("service.id").equals("") && config.getProperty("service.auth.apikeys") != null && !config.getProperty("service.auth.apikeys").equals("")) {
 
             try {
-                // TODO alternative Lösung, da für automatischen Neustart keine Eingabe möglich!
-                Scanner scanner = new Scanner(System.in);
-                System.out.println("Password for Api-Key support: ");
-                String password = scanner.nextLine();
+                String password = config.getProperty("service.id");
 
                 BufferedReader in = new BufferedReader(new InputStreamReader(new FileInputStream(config.getProperty("service.auth.apikeys")), "UTF-8"));
 

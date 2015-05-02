@@ -58,48 +58,9 @@
 
                         <h1><a id="inhalt" name="inhalt"></a>Anmeldung</h1>
 
-                        <form name="authzdienst" class="formnavi" method="POST"><xsl:attribute name="action"><xsl:value-of select="$formURL"/></xsl:attribute>
-                            <div>
+                        <p><span class="rahmen rot">Anmeldung fehlgeschlagen. Bitte überprüfen Sie Account und Passwort.</span></p>
 
-                                <xsl:for-each select="tokenize($redirect_uri_params, '&amp;')">
-                                    <input type="hidden">
-                                        <xsl:attribute name="name"><xsl:value-of select="tokenize(current(), '=')[1]"/></xsl:attribute>
-                                        <xsl:attribute name="value"><xsl:value-of select="tokenize(current(), '=')[2]"/></xsl:attribute>
-                                    </input>
-                                </xsl:for-each>
-
-                                <input type="hidden" name="grant_type"><xsl:attribute name="value"><xsl:value-of select="'password'"/></xsl:attribute></input>
-
-                                <xsl:if test="exists(requesterror)">
-                                    <xsl:choose>
-                                        <xsl:when test="contains(requesterror/description, 'User blocked')">
-                                            <p><span class="rahmen rot">Ihr Konto ist gesperrt. Bitte wenden Sie sich an das <a href="https://www.ub.tu-dortmund.de/service/ausleihzentrum.html">Ausleihzentrum</a>.</span></p>
-                                        </xsl:when>
-                                        <xsl:otherwise>
-                                            <p><span class="rahmen rot">Anmeldung fehlgeschlagen. Bitte Ã¼berprÃ¼fen Sie Account und Passwort.</span></p>
-                                        </xsl:otherwise>
-                                    </xsl:choose>
-
-                                </xsl:if>
-
-                                <div>
-                                    <label for="account"><strong>Uni-Account / Bibliotheks-Account</strong></label><br />
-                                    <input name="username" id="account" type="text" size="23" value="{$username}"/><br />
-                                </div>
-                                <div id="passwd">
-                                    <label for="passwort"><strong>Passwort</strong></label><br />
-                                    <input name="password" id="passwort" type="password" size="20"/><br />
-                                </div>
-
-                                <div class="bishier abso">
-                                    <input id="loginWeiter" type="submit" value="weiter" title="weiter" />
-                                    <xsl:variable name="reset" select="substring-after($redirectURL, 'redirect_url=')"/>
-                                    <input type="reset" value="abbrechen" onclick="location.href='{$reset}'" />
-                                </div>
-                            </div>
-                        </form>
-
-                        <p id="date">01.04.14</p>
+                        <p id="date">04.05.15</p>
                     </div>
                     <!-- Ende Seiteninhalt //-->
 

@@ -22,60 +22,35 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
  */
 
-package de.tu_dortmund.ub.api.paia.model;
+package de.tu_dortmund.ub.api.paia.core.model;
+
+
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import javax.xml.bind.annotation.XmlElement;
+import java.util.ArrayList;
 
-public class LoginResponse {
+@JsonSerialize(include= JsonSerialize.Inclusion.NON_NULL)
+public class FeeList {
 
-    private String patron;
-    private String access_token;
-    private String token_type;
-    private String scope;
-    private long expires_in;
-
-    @XmlElement
-    public String getPatron() {
-        return patron;
-    }
-
-    public void setPatron(String patron) {
-        this.patron = patron;
-    }
+    private String amount; 	// 0..1 	money 	Sum of all fees. May also be negative! [0-9]+\.[0-9][0-9] [A-Z][A-Z][A-Z]
+    private ArrayList<Fee> fee;
 
     @XmlElement
-    public String getAccess_token() {
-        return access_token;
+    public String getAmount() {
+        return amount;
     }
 
-    public void setAccess_token(String access_token) {
-        this.access_token = access_token;
+    public void setAmount(String amount) {
+        this.amount = amount;
     }
 
     @XmlElement
-    public String getToken_type() {
-        return token_type;
+    public ArrayList<Fee> getFee() {
+        return fee;
     }
 
-    public void setToken_type(String token_type) {
-        this.token_type = token_type;
-    }
-
-    @XmlElement
-    public String getScope() {
-        return scope;
-    }
-
-    public void setScope(String scope) {
-        this.scope = scope;
-    }
-
-    @XmlElement
-    public long getExpires_in() {
-        return expires_in;
-    }
-
-    public void setExpires_in(long expires_in) {
-        this.expires_in = expires_in;
+    public void setFee(ArrayList<Fee> fee) {
+        this.fee = fee;
     }
 }

@@ -2,10 +2,10 @@ package de.tu_dortmund.ub.api.paia.core.ils;
 
 import com.sybase.jdbc2.jdbc.SybDriver;
 import de.tu_dortmund.ub.api.paia.core.ils.model.Patron;
-import de.tu_dortmund.ub.api.paia.model.Document;
-import de.tu_dortmund.ub.api.paia.model.DocumentList;
-import de.tu_dortmund.ub.api.paia.model.Fee;
-import de.tu_dortmund.ub.api.paia.model.FeeList;
+import de.tu_dortmund.ub.api.paia.core.model.Document;
+import de.tu_dortmund.ub.api.paia.core.model.DocumentList;
+import de.tu_dortmund.ub.api.paia.core.model.Fee;
+import de.tu_dortmund.ub.api.paia.core.model.FeeList;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import org.oclcpica.xslnp.client.SLNPAllUserData.Request_SLNPAllUserData;
@@ -1037,7 +1037,7 @@ public class IlsSunRise implements IntegratedLibrarySystem {
     }
 
     @Override
-    public Patron change(String patronid, de.tu_dortmund.ub.api.paia.model.Patron patron) throws ILSException {
+    public Patron change(String patronid, de.tu_dortmund.ub.api.paia.core.model.Patron patron) throws ILSException {
 
         this.logger.debug("patronid = " + patronid);
         String borrowerNumber = this.getBorrowerNumber(patronid);

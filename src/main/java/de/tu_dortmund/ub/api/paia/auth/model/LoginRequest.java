@@ -22,10 +22,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
  */
 
-package de.tu_dortmund.ub.api.paia.model;
+package de.tu_dortmund.ub.api.paia.auth.model;
+
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
 
+@JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
+@XmlRootElement(name = "login")
 public class LoginRequest {
 
     private String username;

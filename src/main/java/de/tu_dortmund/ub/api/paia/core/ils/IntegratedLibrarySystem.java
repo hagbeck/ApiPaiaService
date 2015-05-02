@@ -25,8 +25,8 @@ SOFTWARE.
 package de.tu_dortmund.ub.api.paia.core.ils;
 
 import de.tu_dortmund.ub.api.paia.core.ils.model.Patron;
-import de.tu_dortmund.ub.api.paia.model.DocumentList;
-import de.tu_dortmund.ub.api.paia.model.FeeList;
+import de.tu_dortmund.ub.api.paia.core.model.DocumentList;
+import de.tu_dortmund.ub.api.paia.core.model.FeeList;
 
 import java.util.Properties;
 
@@ -54,6 +54,6 @@ public interface IntegratedLibrarySystem {
 
     DocumentList cancel(String patronid, DocumentList documentList) throws ILSException;
 
-    Patron change(String patronid, de.tu_dortmund.ub.api.paia.model.Patron patron) throws ILSException;
+    Patron change(String patronid, de.tu_dortmund.ub.api.paia.core.model.Patron patron) throws ILSException;
 
 }

@@ -22,7 +22,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
  */
 
-package de.tu_dortmund.ub.api.paia.model;
+package de.tu_dortmund.ub.api.paia.core.model;
 
 /**
  * Created by cihabe on 05.02.14.

@@ -22,35 +22,27 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
  */
 
-package de.tu_dortmund.ub.api.paia.model;
+package de.tu_dortmund.ub.api.paia.auth.model;
 
 
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import javax.xml.bind.annotation.XmlElement;
-import java.util.ArrayList;
 
-@JsonSerialize(include= JsonSerialize.Inclusion.NON_NULL)
-public class FeeList {
+/**
+ * Created by cihabe on 10.11.2014.
+ */
+@JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
+public class LogoutRequest {
 
-    private String amount; 	// 0..1 	money 	Sum of all fees. May also be negative! [0-9]+\.[0-9][0-9] [A-Z][A-Z][A-Z]
-    private ArrayList<Fee> fee;
-
-    @XmlElement
-    public String getAmount() {
-        return amount;
-    }
-
-    public void setAmount(String amount) {
-        this.amount = amount;
-    }
+    private String patron;
 
     @XmlElement
-    public ArrayList<Fee> getFee() {
-        return fee;
+    public String getPatron() {
+        return patron;
     }
 
-    public void setFee(ArrayList<Fee> fee) {
-        this.fee = fee;
+    public void setPatron(String patron) {
+        this.patron = patron;
     }
 }

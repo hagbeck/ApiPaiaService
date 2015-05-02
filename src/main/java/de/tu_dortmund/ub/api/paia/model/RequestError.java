@@ -28,9 +28,6 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import javax.xml.bind.annotation.XmlRootElement;
 
-/**
- * Created by cihabe on 05.02.14.
- */
 @JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
 @XmlRootElement(name = "requesterror")
 public class RequestError {

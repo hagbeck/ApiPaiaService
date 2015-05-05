@@ -29,7 +29,7 @@ import de.tu_dortmund.ub.api.paia.PaiaServiceException;
 import de.tu_dortmund.ub.api.paia.auth.model.LoginResponse;
 import de.tu_dortmund.ub.api.paia.core.ils.ILSException;
 import de.tu_dortmund.ub.api.paia.core.ils.IntegratedLibrarySystem;
-import de.tu_dortmund.ub.api.paia.core.ils.model.Patron;
+import de.tu_dortmund.ub.api.paia.core.model.Patron;
 import de.tu_dortmund.ub.api.paia.core.model.Document;
 import de.tu_dortmund.ub.api.paia.core.model.DocumentList;
 import de.tu_dortmund.ub.api.paia.core.model.FeeList;
@@ -43,17 +43,8 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
-import org.apache.oltu.oauth2.client.OAuthClient;
-import org.apache.oltu.oauth2.client.URLConnectionClient;
-import org.apache.oltu.oauth2.client.request.OAuthClientRequest;
-import org.apache.oltu.oauth2.client.response.OAuthJSONAccessTokenResponse;
-import org.apache.oltu.oauth2.common.OAuth;
-import org.apache.oltu.oauth2.common.exception.OAuthProblemException;
-import org.apache.oltu.oauth2.common.exception.OAuthSystemException;
-import org.apache.oltu.oauth2.common.message.types.ResponseType;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
-import org.eclipse.jetty.http.HttpHeader;
 import org.jdom2.JDOMException;
 import org.jdom2.input.SAXBuilder;
 import org.jdom2.transform.JDOMSource;
@@ -733,7 +724,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                     case "patron": {
 
-                        Patron patron = integratedLibrarySystem.patron(patronid, false);
+                        de.tu_dortmund.ub.api.paia.core.ils.model.Patron patron = integratedLibrarySystem.patron(patronid, false);
 
                         if (patron != null) {
 
@@ -828,7 +819,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "fullpatron": {
 
-                        Patron patron = integratedLibrarySystem.patron(patronid, true);
+                        de.tu_dortmund.ub.api.paia.core.ils.model.Patron patron = integratedLibrarySystem.patron(patronid, true);
 
                         if (patron != null) {
 

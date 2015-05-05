@@ -608,7 +608,7 @@ public class IlsSunRise implements IntegratedLibrarySystem {
                     }
                 }
 
-                // TODO ermitteln des Katkey
+                // ermitteln des Katkey
                 try {
                     this.logger.info("edition = '" + edition + "'");
                     Response_SLNPOpsSearch responseSlnpOpsSearch = this.opsSearch("0010", edition);
@@ -618,7 +618,7 @@ public class IlsSunRise implements IntegratedLibrarySystem {
 
                     if (responseSlnpOpsSearch == null || hits == 0) {
 
-                        // TODO keine Titel-Treffer => leere ArrayList
+                        // keine Titel-Treffer => leere ArrayList
                         document.setError("NoSuchMediaAvailable");
 
                         if (responseList.getDoc() == null) {
@@ -904,7 +904,7 @@ public class IlsSunRise implements IntegratedLibrarySystem {
             }
             else {
 
-                // TODO erst teilqualifiziert, dann - falls Fehler - vollqualifiziert
+                // erst teilqualifiziert, dann - falls Fehler - vollqualifiziert
                 Stub stub = createSLNPCancelOrderReservationProxy();
 
                 stub._setProperty(javax.xml.rpc.Stub.ENDPOINT_ADDRESS_PROPERTY, this.config.getProperty("ils.xslnp.service.url") + "SLNPCancelOrderReservation");
@@ -957,7 +957,7 @@ public class IlsSunRise implements IntegratedLibrarySystem {
                     this.logger.debug("SLNPCancelOrderReservation - " + e.getErrorCode()); // 510
                     this.logger.debug("SLNPCancelOrderReservation - " + e.getErrorType()); // NoCancellationPossible
 
-                    // TODO weiterer Versuch als "vollqualifiziert"
+                    // weiterer Versuch als "vollqualifiziert"
                     if (e.getErrorType().equals("NoCancellationPossible")) {
 
                         requestSlnpCancelOrderReservation.setCatKey(null);
@@ -1046,15 +1046,7 @@ public class IlsSunRise implements IntegratedLibrarySystem {
         }
         this.logger.debug("patronid = " + patronid);
 
-        // TODO Change OPACPin via SQL
-        String host = "192.168.150.11";
-        String url = "jdbc:sybase:Tds:"+host+":4100";
-        String username = "sa";
-        String password ="";
-        SybDriver sybDriver = null;
-        Connection conn;
-
-        // TODO SQL but first a fake method
+        // TODO change via XSLNP
 
         return null;
     }

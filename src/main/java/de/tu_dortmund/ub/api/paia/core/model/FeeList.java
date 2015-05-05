@@ -28,8 +28,10 @@ package de.tu_dortmund.ub.api.paia.core.model;
 import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
 import java.util.ArrayList;
 
+@XmlRootElement(name = "fees")
 @JsonSerialize(include= JsonSerialize.Inclusion.NON_NULL)
 public class FeeList {
 

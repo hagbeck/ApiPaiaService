@@ -176,6 +176,30 @@ public class PaiaAuthEndpoint extends HttpServlet {
             access_token = httpServletRequest.getParameter("access_token");
         }
 
+        if (access_token.equals("")) {
+
+            // if exists PaiaService-Cookie: read content
+            Cookie[] cookies = httpServletRequest.getCookies();
+
+            if (cookies != null) {
+                for (Cookie cookie : cookies) {
+                    if (cookie.getName().equals("PaiaService")) {
+
+                        String value = URLDecoder.decode(cookie.getValue(), "UTF-8");
+                        this.logger.info(value);
+                        LoginResponse loginResponse = mapper.readValue(value, LoginResponse.class);
+
+                        // A C H T U N G: ggf. andere patronID im Cookie als in Request (UniAccount vs. BibAccount)
+                        if (loginResponse.getPatron().equals(patronid)) {
+                            access_token = loginResponse.getAccess_token();
+                        }
+
+                        break;
+                    }
+                }
+            }
+        }
+
         this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "Service: " + service);
         this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "Accept: " + accept);
         this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "Access_token: " + access_token);
@@ -283,6 +307,54 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
             case "login": {
 
+                // if access_token not equals "" >> delete token + new login
+                if (!access_token.equals("")) {
+
+                    CloseableHttpClient httpclient = HttpClients.createDefault();
+
+                    String tokenRequestBody = "{ \"access_token\"=\"" + access_token + "\","
+                            + "\"client_id\"=\"" + this.config.getProperty("service.auth.ubdo.client_id") + "\","
+                            + "\"client_secret\"=\"" + this.config.getProperty("service.auth.ubdo.client_secret") + "\""
+                            + "}";
+
+                    HttpPost httpPost = new HttpPost(this.config.getProperty("service.auth.ubdo.tokenendpoint") + "/revoke");
+                    StringEntity stringEntity = new StringEntity(tokenRequestBody, ContentType.create("application/json", Consts.UTF_8));
+                    httpPost.setEntity(stringEntity);
+
+                    CloseableHttpResponse httpResponse = httpclient.execute(httpPost);
+
+                    try {
+
+                        int statusCode = httpResponse.getStatusLine().getStatusCode();
+                        HttpEntity httpEntity = httpResponse.getEntity();
+
+                        switch (statusCode) {
+
+                            case 200: {
+
+                                this.logger.info("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode);
+
+                                break;
+                            }
+                            default: {
+
+                                this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode);
+                            }
+                        }
+
+                        EntityUtils.consume(httpEntity);
+                    } finally {
+                        httpResponse.close();
+                    }
+
+                    // delete cookie
+                    Cookie cookie = new Cookie("PaiaService", null);
+                    cookie.setMaxAge(0);
+                    httpServletResponse.addCookie(cookie);
+
+                    access_token = "";
+                }
+
                 LoginRequest loginRequest = null;
                 try {
 
@@ -290,40 +362,47 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 }
                 catch (Exception e) {
 
-                    String[] params = requestBody.split("&");
+                    if (requestBody != null && !requestBody.equals("")) {
 
-                    if (params.length > 1) {
+                        String[] params = requestBody.split("&");
 
-                        loginRequest = new LoginRequest();
+                        if (params.length > 1) {
 
-                        for (String param : params) {
+                            loginRequest = new LoginRequest();
 
-                            if (param.startsWith("grant_type")) {
-                                loginRequest.setGrant_type(param.split("=")[1]);
-                            }
-                            else if (param.startsWith("username")) {
-                                loginRequest.setUsername(param.split("=")[1]);
-                            }
-                            else if (param.startsWith("password")) {
-                                loginRequest.setPassword(param.split("=")[1]);
-                            }
-                            else if (param.startsWith("format")) {
+                            for (String param : params) {
 
-                                format = param.split("=")[1];
-                                this.logger.info("format = " + format);
-                            }
-                            else if (param.startsWith("redirect_url")) {
-
-                                redirect_url = URLDecoder.decode(param.split("=")[1],"UTF-8");
-                                this.logger.info("redirect_url = " + redirect_url);
-                            }
-                            else {
-                                // Tu nix
+                                if (param.startsWith("grant_type")) {
+                                    loginRequest.setGrant_type(param.split("=")[1]);
+                                } else if (param.startsWith("username")) {
+                                    loginRequest.setUsername(param.split("=")[1]);
+                                } else if (param.startsWith("password")) {
+                                    loginRequest.setPassword(param.split("=")[1]);
+                                } else if (param.startsWith("format")) {
+                                    format = param.split("=")[1];
+                                    this.logger.info("format = " + format);
+                                } else if (param.startsWith("redirect_url")) {
+                                    redirect_url = URLDecoder.decode(param.split("=")[1], "UTF-8");
+                                    this.logger.info("redirect_url = " + redirect_url);
+                                } else {
+                                    // Tu nix
+                                }
                             }
                         }
                     }
-                    else {
+                    else if (httpServletRequest.getParameter("grant_type") != null && !httpServletRequest.getParameter("grant_type").equals("") &&
+                            httpServletRequest.getParameter("username") != null && !httpServletRequest.getParameter("username").equals("") &&
+                            httpServletRequest.getParameter("password") != null && !httpServletRequest.getParameter("password").equals("") &&
+                            httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
 
+                        loginRequest = new LoginRequest();
+                        loginRequest.setGrant_type(httpServletRequest.getParameter("grant_type"));
+                        loginRequest.setUsername(httpServletRequest.getParameter("username"));
+                        loginRequest.setPassword(httpServletRequest.getParameter("password"));
+                        redirect_url = httpServletRequest.getParameter("redirect_url");
+
+                    }
+                    else {
                         loginRequest = null;
                     }
                 }
@@ -407,6 +486,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         mapper.writeValue(stringWriter, loginResponse);
                         Cookie cookie = new Cookie("PaiaService", URLEncoder.encode(stringWriter.toString(), "UTF-8"));
                         cookie.setMaxAge(-1);
+                        cookie.setPath("/");
                         httpServletResponse.addCookie(cookie);
 
                         // XML-Ausgabe mit JAXB
@@ -523,10 +603,10 @@ public class PaiaAuthEndpoint extends HttpServlet {
                             }
                             catch (JAXBException e) {
                                 this.logger.error(e.getMessage(), e.getCause());
-                                httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message. Message is 'Document not found'.");
+                                httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
                             }
                             catch (JDOMException e) {
-                                httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message. Message is 'Document not found'.");
+                                httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
                             }
                         }
                     }
@@ -649,7 +729,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
                 httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                // add cookie
+                // delete cookie
                 Cookie cookie = new Cookie("PaiaService", null);
                 cookie.setMaxAge(0);
                 httpServletResponse.addCookie(cookie);

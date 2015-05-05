@@ -25,6 +25,8 @@ SOFTWARE.
 package de.tu_dortmund.ub.api.paia.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.tu_dortmund.ub.api.paia.PaiaServiceException;
+import de.tu_dortmund.ub.api.paia.auth.model.LoginResponse;
 import de.tu_dortmund.ub.api.paia.core.ils.ILSException;
 import de.tu_dortmund.ub.api.paia.core.ils.IntegratedLibrarySystem;
 import de.tu_dortmund.ub.api.paia.core.ils.model.Patron;
@@ -33,10 +35,14 @@ import de.tu_dortmund.ub.api.paia.core.model.DocumentList;
 import de.tu_dortmund.ub.api.paia.core.model.FeeList;
 import de.tu_dortmund.ub.api.paia.model.RequestError;
 import de.tu_dortmund.ub.util.impl.Lookup;
+import net.sf.saxon.s9api.*;
+import org.apache.commons.io.IOUtils;
+import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
 import org.apache.oltu.oauth2.client.OAuthClient;
 import org.apache.oltu.oauth2.client.URLConnectionClient;
 import org.apache.oltu.oauth2.client.request.OAuthClientRequest;
@@ -48,16 +54,28 @@ import org.apache.oltu.oauth2.common.message.types.ResponseType;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import org.eclipse.jetty.http.HttpHeader;
+import org.jdom2.JDOMException;
+import org.jdom2.input.SAXBuilder;
+import org.jdom2.transform.JDOMSource;
 
+import javax.json.Json;
+import javax.json.JsonObject;
+import javax.json.JsonReader;
 import javax.servlet.ServletException;
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
+import javax.xml.transform.stream.StreamSource;
 import java.io.*;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.Properties;
 
 /**
@@ -70,6 +88,10 @@ public class PaiaCoreEndpoint extends HttpServlet {
     private Properties config = new Properties();
     private Logger logger = Logger.getLogger(PaiaCoreEndpoint.class.getName());
     private Properties apikeys;
+
+    private String format;
+    private String language;
+    private String redirect_url;
 
     /**
      *
@@ -130,134 +152,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
      */
     protected void doGet(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) throws ServletException, IOException {
 
-        // GET kommt vor, wenn in einer Anwendung, z.B. in Katalog plus, ein Nutzer der z.B. vormerken möchte noch nicht
-        // angemeldet ist. Hier ist es dann möglich, dass die Anwendung einen GET-Request als einfaches <a>-Tag sendet.
-
-        ObjectMapper mapper = new ObjectMapper();
-
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "PathInfo = " + httpServletRequest.getPathInfo());
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "QueryString = " + httpServletRequest.getQueryString());
-
-        String patronid = "";
-        String service = "";
-        String accept = "";
-        String access_token = "";
-        String authorization = "";
-
-        String path = httpServletRequest.getPathInfo();
-        if (path != null) {
-            String[] params = path.substring(1,path.length()).split("/");
-
-            if (params.length == 1) {
-                patronid = params[0];
-                service = "patron";
-            }
-            else if (params.length == 2) {
-                patronid = params[0];
-                service = params[1];
-            }
-            else if (params[1].equals("items") && params.length == 3) {
-                patronid = params[0];
-                service = params[1] + "/" + params[2];
-            }
-        }
-
-        // TODO Alternative: OpenAM-Session-Cookie abfragen und im Falle der Existenz das UserID-Attribut abfragen und mit dem aus der URL vergleichen. Bei ok: Anlegen eines PAIA-Tokens
-        // 1. Schritt: Hole 'Accept' und 'Authorization' aus dem Header;
-        Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
-        while ( headerNames.hasMoreElements() ) {
-
-            String headerNameKey = (String) headerNames.nextElement();
-            this.logger.debug("[" + config.getProperty("service.name") + "] " + "headerNameKey = " + headerNameKey + " / headerNameValue = " + httpServletRequest.getHeader(headerNameKey));
-
-            if (headerNameKey.equals("Accept")) {
-                accept = httpServletRequest.getHeader( headerNameKey );
-            }
-            if (headerNameKey.equals("Authorization")) {
-                authorization = httpServletRequest.getHeader( headerNameKey );
-                access_token = authorization.split(" ")[1];
-            }
-        }
-
-        if (authorization.equals("") && httpServletRequest.getParameter("access_token") != null && !httpServletRequest.getParameter("access_token").equals("")) {
-            access_token = httpServletRequest.getParameter("access_token");
-            authorization = "Bearer " + access_token;
-        }
-
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Patron: " + patronid);
-        // "patronid" als Platzhalter entfernen
-        if (patronid.equals("patronid")) {
-            patronid = "";
-            this.logger.debug("Patron: " + patronid);
-        }
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Service: " + service);
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept: " + accept);
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization);
-
-        // 2. Schritt: service supported by GET? -> NO: SC_METHOD_NOT_ALLOWED
-        if (service.equals("patron") || service.equals("fullpatron") || service.equals("items") || service.startsWith("items/") || service.equals("fees") || service.equals("request")) {
-
-            DocumentList documentList = null;
-
-            if (service.equals("request") && httpServletRequest.getParameter("document_id") != null) {
-
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + "TEST request + document_id? " + service + ", " + httpServletRequest.getParameter("document_id"));
-
-                documentList = new DocumentList();
-                documentList.setDoc(new ArrayList<Document>());
-
-                Document document = new Document();
-                document.setEdition(httpServletRequest.getParameter("document_id"));
-
-                documentList.getDoc().add(document);
-
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + "TEST documentList? " + documentList.getDoc().size());
-            }
-
-            // Authentifizierung und Autorisierung
-            if (!authorization.equals("") && authorization.contains("Bearer")) {
-
-                // Teste Token: HTTP GET {OAuthTokenEndpoint}/{authorization}?scope={SCOPE}
-                this.checkToken(httpServletRequest, httpServletResponse, service, patronid, access_token, documentList);
-            }
-            else {
-
-                // Authorization
-                this.authorize(httpServletRequest, httpServletResponse, service, patronid, documentList);
-            }
-        }
-        else {
-
-            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_METHOD_NOT_ALLOWED + ": " + "GET for '" + service + "' not allowed!");
-
-            httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-            httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-            httpServletResponse.setContentType("application/json");
-            httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
-
-            // Error handling mit suppress_response_codes=true
-            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-            }
-            // Error handling mit suppress_response_codes=false (=default)
-            else {
-                httpServletResponse.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
-            }
-
-            // Json für Response body
-            RequestError requestError = new RequestError();
-            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED)));
-            requestError.setCode(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
-            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
-            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
-
-            StringWriter json = new StringWriter();
-            mapper.writeValue(json, requestError);
-            this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
-
-            // send response
-            httpServletResponse.getWriter().println(json);
-        }
+        this.doPost(httpServletRequest,httpServletResponse);
     }
 
     /**
@@ -277,82 +172,265 @@ public class PaiaCoreEndpoint extends HttpServlet {
         String patronid = "";
         String service = "";
         String accept = "";
-        String access_token = "";
         String authorization = "";
 
         String path = httpServletRequest.getPathInfo();
-        String[] params = path.substring(1,path.length()).split("/");
+        if (path != null) {
+            String[] params = path.substring(1,path.length()).split("/");
 
-        if (params.length == 1) {
-            patronid = params[0];
-            service = "patron";
-        }
-        else if (params.length == 2) {
-            patronid = params[0];
-            service = params[1];
-        }
-
-        // 1. Schritt: Hole 'Accept' und 'Authorization' aus dem Header;
-        Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
-        while ( headerNames.hasMoreElements() ) {
-
-            String headerNameKey = (String) headerNames.nextElement();
-            this.logger.debug("[" + config.getProperty("service.name") + "] " + "headerNameKey = " + headerNameKey + " / headerNameValue = " + httpServletRequest.getHeader(headerNameKey));
-
-            if (headerNameKey.equals("Accept")) {
-                accept = httpServletRequest.getHeader( headerNameKey );
+            if (params.length == 1) {
+                patronid = params[0];
+                service = "patron";
             }
-            if (headerNameKey.equals("Authorization")) {
-                authorization = httpServletRequest.getHeader( headerNameKey );
-                String[] tmp = authorization.split(" ");
-                if (tmp.length > 1) {
-                    access_token = tmp[1];
-                }
-                else {
-                    access_token= tmp[0];
-                }
+            else if (params.length == 2) {
+                patronid = params[0];
+                service = params[1];
+            }
+            else if (params[1].equals("items") && params.length == 3) {
+                patronid = params[0];
+                service = params[1] + "/" + params[2];
             }
         }
-
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Patron: " + patronid);
         this.logger.debug("[" + config.getProperty("service.name") + "] " + "Service: " + service);
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept: " + accept);
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization);
+        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Patron: " + patronid);
 
-        StringBuffer jb = new StringBuffer();
-        String line = null;
-        try {
-            BufferedReader reader = httpServletRequest.getReader();
-            while ((line = reader.readLine()) != null)
-                jb.append(line);
-        } catch (Exception e) { /*report an error*/ }
+        this.format = "html";
 
-        // read DocumentList
-        DocumentList documents = mapper.readValue(jb.toString(), DocumentList.class);
+        if (httpServletRequest.getParameter("format") != null && !httpServletRequest.getParameter("format").equals("")) {
 
-        // 2. Schritt: Authentifizierung und Autorisierung
-        if (service.equals("request") || service.equals("renew") || service.equals("cancel")) {
+            this.format = httpServletRequest.getParameter("format");
+        }
+        else {
 
-            // Authentifizierung und Autorisierung
-            if (!authorization.equals("") && authorization.contains("Bearer")) {
+            Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
+            while ( headerNames.hasMoreElements() ) {
+                String headerNameKey = headerNames.nextElement();
 
-                // Teste Token: HTTP GET {OAuthTokenEndpoint}/{authorization}?scope={SCOPE}
-                this.checkToken(httpServletRequest, httpServletResponse, service, patronid, access_token, documents);
+                if (headerNameKey.equals("Accept")) {
+
+                    this.logger.debug("headerNameKey = " + httpServletRequest.getHeader( headerNameKey ));
+
+                    if (httpServletRequest.getHeader( headerNameKey ).contains("text/html")) {
+                        this.format = "html";
+                    }
+                    else if (httpServletRequest.getHeader( headerNameKey ).contains("application/xml")) {
+                        this.format = "xml";
+                    }
+                    else if (httpServletRequest.getHeader( headerNameKey ).contains("application/json")) {
+                        this.format = "json";
+                    }
+                }
+            }
+        }
+
+        this.logger.info("format = " + this.format);
+
+        this.redirect_url = "";
+
+        if (httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
+
+            this.redirect_url = httpServletRequest.getParameter("redirect_url");
+        }
+
+        this.logger.info("redirect_url = " + this.redirect_url);
+
+        httpServletResponse.setHeader("Access-Control-Allow-Origin","*");
+
+        this.language = "";
+
+        // PAIA core - function
+        if ( (httpServletRequest.getMethod().equals("GET") && (service.equals("patron") || service.equals("fullpatron") || service.equals("items") || service.startsWith("items/ordered") || service.startsWith("items/borrowed") || service.startsWith("items/reserved") || service.equals("fees")) ) ||
+                (httpServletRequest.getMethod().equals("POST") && (service.equals("request") || service.equals("renew") || service.equals("cancel"))) ) {
+
+            // 1. Schritt: Hole 'Accept' und 'Authorization' aus dem Header;
+            Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
+            while ( headerNames.hasMoreElements() ) {
+
+                String headerNameKey = (String) headerNames.nextElement();
+                this.logger.debug("[" + config.getProperty("service.name") + "] " + "headerNameKey = " + headerNameKey + " / headerNameValue = " + httpServletRequest.getHeader(headerNameKey));
+
+                if (headerNameKey.equals("Accept-Language")) {
+                    this.language = httpServletRequest.getHeader( headerNameKey );
+                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept-Language: " + this.language);
+                }
+                if (headerNameKey.equals("Accept")) {
+                    accept = httpServletRequest.getHeader( headerNameKey );
+                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept: " + accept);
+                }
+                if (headerNameKey.equals("Authorization")) {
+                    authorization = httpServletRequest.getHeader( headerNameKey );
+                }
+            }
+
+            // language
+            if (this.language.startsWith("de")) {
+                this.language = "de";
+            }
+            else if (this.language.startsWith("en")) {
+                this.language = "en";
+            }
+            else if (httpServletRequest.getParameter("l") != null) {
+                this.language = httpServletRequest.getParameter("l");
             }
             else {
+                this.language = "de";
+            }
 
-                // Authorization
-                this.authorize(httpServletRequest, httpServletResponse, service, patronid, documents);
+            // read rquestBody
+            StringBuffer jb = new StringBuffer();
+            String line = null;
+            try {
+                BufferedReader reader = httpServletRequest.getReader();
+                while ((line = reader.readLine()) != null)
+                    jb.append(line);
+            } catch (Exception e) { /*report an error*/ }
+
+            String requestBody = jb.toString();
+
+            // if not exists token: read request parameter
+            if (authorization.equals("") && httpServletRequest.getParameter("access_token") != null && !httpServletRequest.getParameter("access_token").equals("")) {
+                authorization = httpServletRequest.getParameter("access_token");
+            }
+
+            // if not exists token
+            if (authorization.equals("")) {
+
+                // if exists PaiaService-Cookie: read content
+                Cookie[] cookies = httpServletRequest.getCookies();
+
+                if (cookies != null) {
+                    for (Cookie cookie : cookies) {
+                        if (cookie.getName().equals("PaiaService")) {
+
+                            String value = URLDecoder.decode(cookie.getValue(), "UTF-8");
+                            this.logger.info(value);
+                            LoginResponse loginResponse = mapper.readValue(value, LoginResponse.class);
+
+                            // A C H T U N G: ggf. andere patronID im Cookie als in Request (UniAccount vs. BibAccount)
+                            if (loginResponse.getPatron().equals(patronid)) {
+                                authorization = loginResponse.getAccess_token();
+                            }
+
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // check token ...
+            try {
+
+                boolean isAuthorized = false;
+
+                if (!authorization.equals("")) {
+                    // ... against local OAuth 2.0 service
+                    isAuthorized = this.checkToken(httpServletResponse, service, authorization);
+                }
+                this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
+
+                // ... - if not is authorized - against DFN-AAI service
+                if (!isAuthorized) {
+
+                    // TODO if exists OpenAM-Session-Cookie: read content
+                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
+                }
+
+                // read document list
+                DocumentList documentList = null;
+
+                try {
+
+                    // read DocumentList
+                    documentList = mapper.readValue(requestBody, DocumentList.class);
+                }
+                catch (Exception e) {
+
+                    if (!requestBody.equals("")) {
+
+                        String[] params = requestBody.split("&");
+
+                        if (params.length > 1) {
+
+                            documentList = new DocumentList();
+                            documentList.setDoc(new ArrayList<Document>());
+
+                            for (String param : params) {
+
+                                if (param.startsWith("document_id")) {
+                                    Document document = new Document();
+                                    document.setEdition(param.split("=")[1]);
+                                    documentList.getDoc().add(document);
+                                }
+                            }
+                        }
+                    }
+                    else if (httpServletRequest.getParameter("document_id") != null && !httpServletRequest.getParameter("document_id").equals("")) {
+
+                        Document document = new Document();
+                        document.setEdition(httpServletRequest.getParameter("document_id"));
+
+                        documentList = new DocumentList();
+                        documentList.setDoc(new ArrayList<Document>());
+                        documentList.getDoc().add(document);
+                    }
+                    else {
+
+                        // if exists cookie with name "PaiaServiceDocumentList": read it
+                        Cookie[] cookies = httpServletRequest.getCookies();
+
+                        if (cookies != null) {
+                            for (Cookie cookie : cookies) {
+                                if (cookie.getName().equals("PaiaServiceDocumentList")) {
+
+                                    if (cookie.getValue() != null && !cookie.getValue().equals("") && !cookie.getValue().equals("null")) {
+
+                                        String value = URLDecoder.decode(cookie.getValue(), "UTF-8");
+                                        this.logger.info(value);
+                                        documentList = mapper.readValue(value, DocumentList.class);
+                                    }
+
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (isAuthorized) {
+
+                    // execute query
+                    this.paiaCore(httpServletRequest, httpServletResponse, patronid, service, documentList);
+                }
+                else {
+
+                    // Authorization
+                    this.authorize(httpServletRequest, httpServletResponse, service, patronid, documentList);
+                }
+
+            }
+            catch (PaiaServiceException e) {
+
+                // Error handling mit suppress_response_codes=true
+                if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                }
+                // Error handling mit suppress_response_codes=false (=default)
+                else {
+                    httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                }
+
+                RequestError requestError = new RequestError();
+                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+
+                this.sendRequestError(httpServletResponse, requestError);
             }
         }
         else {
 
-            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_METHOD_NOT_ALLOWED + ": " + "POST for '" + service + "' not allowed!");
-
-            httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-            httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-            httpServletResponse.setContentType("application/json");
-            httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_METHOD_NOT_ALLOWED + ": " + httpServletRequest.getMethod() + " for '" + service + "' not allowed!");
 
             // Error handling mit suppress_response_codes=true
             if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -363,19 +441,13 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 httpServletResponse.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
             }
 
-            // Json für Response body
             RequestError requestError = new RequestError();
             requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED)));
             requestError.setCode(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
 
-            StringWriter json = new StringWriter();
-            mapper.writeValue(json, requestError);
-            this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
-
-            // send response
-            httpServletResponse.getWriter().println(json);
+            this.sendRequestError(httpServletResponse, requestError);
         }
     }
 
@@ -391,18 +463,18 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
     /**
      *
-     * @param httpServletRequest
      * @param httpServletResponse
      * @param service
-     * @param patronid
      * @param access_token
+     * @return
      * @throws IOException
      */
-    private void checkToken(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String service, String patronid, String access_token, DocumentList documents) throws IOException {
+    private boolean checkToken(HttpServletResponse httpServletResponse, String service, String access_token) throws PaiaServiceException {
 
-        ObjectMapper mapper = new ObjectMapper();
+        boolean isAuthorized = false;
 
         String scope = "";
+
         switch (service) {
 
             case "patron" : {
@@ -458,127 +530,115 @@ public class PaiaCoreEndpoint extends HttpServlet {
         }
 
         CloseableHttpClient httpclient = HttpClients.createDefault();
-        CloseableHttpResponse httpResponse = null;
 
         try {
 
-            int statusCode = -1;
-
             if (this.config.getProperty("service.auth.ubdo.tokenendpoint") != null && !this.config.getProperty("service.auth.ubdo.tokenendpoint").equals("")) {
 
-                String url = this.config.getProperty("service.auth.ubdo.tokenendpoint") + "/" + access_token + "?scope=" + scope;
+                String url = this.config.getProperty("service.auth.ubdo.tokenendpoint") + "/validate?token=" + access_token;
                 this.logger.debug("[" + config.getProperty("service.name") + "] " + "TOKEN-ENDPOINT-URL: " + url);
                 HttpGet httpGet = new HttpGet(url);
 
+                CloseableHttpResponse httpResponse = httpclient.execute(httpGet);
+
                 try {
 
-                    httpResponse = httpclient.execute(httpGet);
-                    statusCode = httpResponse.getStatusLine().getStatusCode();
-                }
-                catch (Exception e) {
+                    int statusCode = httpResponse.getStatusLine().getStatusCode();
+                    HttpEntity httpEntity = httpResponse.getEntity();
 
-                    statusCode = HttpServletResponse.SC_SERVICE_UNAVAILABLE;
-                }
-            }
-            else {
+                    switch (statusCode) {
 
-                statusCode = HttpServletResponse.SC_FORBIDDEN;
-            }
+                        case HttpServletResponse.SC_OK: {
 
-            switch (statusCode) {
+                            // {"valid":true,"scope":[scope],"created":[time_created],"token":[access_token],"expiresIn":[expiration],"userId":"","refreshToken":"","type":"Bearer","clientId":[client_id]}
+                            StringWriter writer = new StringWriter();
+                            IOUtils.copy(httpEntity.getContent(), writer, "UTF-8");
+                            String responseJson = writer.toString();
 
-                case HttpServletResponse.SC_OK: {
+                            logger.info("[" + config.getProperty("service.name") + "] responseJson : " + responseJson);
 
-                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "PaiaService." + service + " kann ausgeführt werden!");
+                            // prüfe 'valid' und 'scopes'
+                            JsonReader jsonReader = Json.createReader(IOUtils.toInputStream(responseJson, "UTF-8"));
+                            JsonObject jsonObject = jsonReader.readObject();
 
-                    this.paiaCore(httpServletRequest, httpServletResponse, patronid, access_token, scope, service, documents);
+                            boolean valid = jsonObject.getBoolean("valid");
+                            String scopes = jsonObject.getString("scope");
 
-                    break;
-                }
-                case HttpServletResponse.SC_FORBIDDEN: {
+                            // valid token?
+                            if (valid && scopes.contains(scope)) {
 
-                    if (apikeys != null && apikeys.containsKey(access_token) && apikeys.getProperty(access_token).contains(scope)) {
+                                this.logger.debug("[" + config.getProperty("service.name") + "] " + "PaiaService." + service + " kann ausgeführt werden!");
 
-                        this.logger.debug("[" + config.getProperty("service.name") + "] " + "PaiaService." + service + " kann ausgeführt werden!");
+                                isAuthorized = true;
+                                httpServletResponse.setHeader("X-OAuth-Scopes", scope);
+                            }
+                            else {
 
-                        this.paiaCore(httpServletRequest, httpServletResponse, patronid, access_token, scope, service, documents);
-                    }
-                    else {
+                                // valid api_key?
+                                if (apikeys != null && apikeys.containsKey(access_token) && apikeys.getProperty(access_token).contains(scope)) {
 
-                        this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_FORBIDDEN + "!");
+                                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "PaiaService." + service + " kann ausgeführt werden!");
 
-                        httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-                        httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-                        httpServletResponse.setContentType("application/json");
-                        httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+                                    isAuthorized = true;
+                                    httpServletResponse.setHeader("X-OAuth-Scopes", scope);
+                                }
+                                else {
 
-                        // Error handling mit suppress_response_codes=true
-                        if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                    isAuthorized = false;
+                                }
+                            }
+
+                            break;
                         }
-                        // Error handling mit suppress_response_codes=false (=default)
-                        else {
-                            httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                        case HttpServletResponse.SC_UNAUTHORIZED: {
+
+                            // valid api_key?
+                            if (apikeys != null && apikeys.containsKey(access_token) && apikeys.getProperty(access_token).contains(scope)) {
+
+                                this.logger.debug("[" + config.getProperty("service.name") + "] " + "PaiaService." + service + " kann ausgeführt werden!");
+
+                                isAuthorized = true;
+                                httpServletResponse.setHeader("X-OAuth-Scopes", scope);
+                            }
+                            else {
+
+                                isAuthorized = false;
+                            }
+
+                            break;
                         }
+                        default: {
 
-                        // Json für Response body
-                        RequestError requestError = new RequestError();
-                        requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
-                        requestError.setCode(HttpServletResponse.SC_FORBIDDEN);
-                        requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
-                        requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
+                            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_SERVICE_UNAVAILABLE + " - Unable to validate the given token!");
 
-                        StringWriter json = new StringWriter();
-                        mapper.writeValue(json, requestError);
-                        this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
-
-                        // send response
-                        httpServletResponse.getWriter().println(json);
+                            throw new PaiaServiceException(HttpServletResponse.SC_SERVICE_UNAVAILABLE + " - Unable to validate the given token!");
+                        }
                     }
 
-                    break;
-                }
-                default: {
-
-                    this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_SERVICE_UNAVAILABLE + "!");
-
-                    httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-                    httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-                    httpServletResponse.setContentType("application/json");
-                    httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
-
-                    // Error handling mit suppress_response_codes=true
-                    if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                    }
-                    // Error handling mit suppress_response_codes=false (=default)
-                    else {
-                        httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-                    }
-
-                    // Json für Response body
-                    RequestError requestError = new RequestError();
-                    requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
-                    requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-                    requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
-                    requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
-
-                    StringWriter json = new StringWriter();
-                    mapper.writeValue(json, requestError);
-                    this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
-
-                    // send response
-                    httpServletResponse.getWriter().println(json);
+                    EntityUtils.consume(httpEntity);
+                } finally {
+                    httpResponse.close();
                 }
             }
+        }
+        catch (IOException e) {
+
+            throw new PaiaServiceException(HttpServletResponse.SC_SERVICE_UNAVAILABLE + " - Unable to validate the given token!");
         }
         finally {
 
-            if (httpResponse !=null) {
+            try {
 
-                httpResponse.close();
+                httpclient.close();
+
+            }
+            catch (IOException e) {
+
+                throw new PaiaServiceException(HttpServletResponse.SC_SERVICE_UNAVAILABLE + " - Unable to validate the given token!");
             }
         }
+
+        return isAuthorized;
     }
 
     /**
@@ -593,196 +653,72 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
         ObjectMapper mapper = new ObjectMapper();
 
-        String oAuthzService = this.config.getProperty("service.auth.ubdo.authzendpoint");
-        String client_id = this.config.getProperty("service.auth.ubdo.client_id.core");
-        String client_secret = this.config.getProperty("service.auth.ubdo.client_secret.core");
-        String function = "/";
-        if (patronid.equals("")) {
-            function += service;
+        // Error handling mit suppress_response_codes=true
+        if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
         }
+        // Error handling mit suppress_response_codes=false (=default)
         else {
-            function += patronid + "/" + service;
+            httpServletResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         }
 
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "HttpHeader.REFERER: " + httpServletRequest.getHeader(HttpHeader.REFERER.asString()));
+        // Json für Response body
+        RequestError requestError = new RequestError();
+        requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED)));
+        requestError.setCode(HttpServletResponse.SC_UNAUTHORIZED);
+        requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".description"));
+        requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".uri"));
 
-        String redirect_url = "";
-
-        if (httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
-
-            redirect_url = URLEncoder.encode(httpServletRequest.getParameter("redirect_url"), "UTF-8");
-        }
-        else {
-            redirect_url = URLEncoder.encode(httpServletRequest.getHeader(HttpHeader.REFERER.asString()).split("&patron=")[0], "UTF-8");
-        }
-
-        String redirect_uri = URLEncoder.encode(this.config.getProperty("service.base_url") + this.config.getProperty("service.appPath.core")
-                + function + "?redirect_uri=" + redirect_url, "UTF-8");
-        String scope = "read_patron read_items read_fees write_items"; // alle möglichen scopes in PAIA
-        String state = Long.toString(System.currentTimeMillis());
-
-        if (httpServletRequest.getParameter("code") == null || httpServletRequest.getParameter("state") == null) {
+        // XML-Ausgabe mit JAXB
+        if (this.format.equals("xml")) {
 
             try {
 
-                OAuthClientRequest.AuthenticationRequestBuilder authenticationRequestBuilder = OAuthClientRequest
-                        .authorizationLocation(oAuthzService)
-                        .setResponseType(ResponseType.CODE.toString())
-                        .setClientId(client_id)
-                        .setParameter("client_secret", client_secret)
-                        .setRedirectURI(redirect_uri)
-                        .setScope(scope)
-                        .setState(state);
+                JAXBContext context = JAXBContext.newInstance(RequestError.class);
+                Marshaller m = context.createMarshaller();
+                m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 
-                if (documents != null && documents.getDoc() != null) {
-                        authenticationRequestBuilder.setParameter("document_id", documents.getDoc().get(0).getEdition());
-                }
+                // Write to HttpResponse
+                httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                m.marshal(requestError, httpServletResponse.getWriter());
 
-                OAuthClientRequest request = authenticationRequestBuilder.buildQueryMessage();
-
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + "Code-URI: " + request.getLocationUri());
-
-                httpServletResponse.sendRedirect(request.getLocationUri());
-
-            } catch (OAuthSystemException e) {
-
-                this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_FORBIDDEN+ ": " + e.getMessage() + "!");
-
-                httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-                httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-                httpServletResponse.setContentType("application/json");
-                httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
-
-                // Error handling mit suppress_response_codes=true
-                if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                }
-                // Error handling mit suppress_response_codes=false (=default)
-                else {
-                    httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                }
-
-                // Json für Response body
-                RequestError requestError = new RequestError();
-                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
-                requestError.setCode(HttpServletResponse.SC_FORBIDDEN);
-                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
-                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
-
-                StringWriter json = new StringWriter();
-                mapper.writeValue(json, requestError);
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
-
-                // send response
-                httpServletResponse.getWriter().println(json);
+            } catch (JAXBException e) {
+                this.logger.error(e.getMessage(), e.getCause());
+                httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
             }
         }
-        else {
 
-            try {
+        // JSON-Ausgabe mit Jackson
+        if (this.format.equals("json")) {
 
-                // TODO Teste 'state'. ABER wie?
+            httpServletResponse.setContentType("application/json;charset=UTF-8");
+            mapper.writeValue(httpServletResponse.getWriter(), requestError);
+        }
 
-                OAuthClientRequest.TokenRequestBuilder tokenRequestBuilder = OAuthClientRequest
-                        .tokenLocation(oAuthzService).setParameter(OAuth.OAUTH_RESPONSE_TYPE, ResponseType.TOKEN.toString())
-                        .setClientId(client_id)
-                        .setClientSecret(client_secret)
-                        .setRedirectURI(URLEncoder.encode(this.config.getProperty("service.baseurl") + ":" + this.config.getProperty("service.endpoint.core"), "UTF-8"))
-                        .setScope(scope)
-                        .setCode(httpServletRequest.getParameter("code"));
+        // html > redirect zu "PAIA auth - login" mit redirect_url = "PAIA core - service"
+        if (this.format.equals("html")) {
 
-                if (documents != null && documents.getDoc() != null) {
-                    tokenRequestBuilder.setParameter("document_id", documents.getDoc().get(0).getEdition());
-                }
-
-                OAuthClientRequest request = tokenRequestBuilder.buildQueryMessage();
-
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + "Token-URI: " + request.getLocationUri());
-
-                OAuthClient oAuthClient = new OAuthClient(new URLConnectionClient());
-
-                OAuthJSONAccessTokenResponse oAuthJSONAccessTokenResponse = oAuthClient.accessToken(request);
-
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + "TokenResponse: " + oAuthJSONAccessTokenResponse.getBody());
-
-                String accessToken = oAuthJSONAccessTokenResponse.getAccessToken();
-                String expiresIn = Long.toString(oAuthJSONAccessTokenResponse.getExpiresIn());
-                patronid = oAuthJSONAccessTokenResponse.getParam("patronid");
-
-                this.logger.debug("PAIAcore." + service + " kann ausgeführt werden!");
-
-                this.paiaCore(httpServletRequest, httpServletResponse, patronid, accessToken, scope, service, documents);
-
-            } catch (OAuthSystemException e) {
-
-                this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_FORBIDDEN+ ": " + e.getMessage() + "!");
-
-                httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-                httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-                httpServletResponse.setContentType("application/json");
-                httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
-
-                // Error handling mit suppress_response_codes=true
-                if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                }
-                // Error handling mit suppress_response_codes=false (=default)
-                else {
-                    httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                }
-
-                // Json für Response body
-                RequestError requestError = new RequestError();
-                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
-                requestError.setCode(HttpServletResponse.SC_FORBIDDEN);
-                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
-                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
-
-                StringWriter json = new StringWriter();
-                mapper.writeValue(json, requestError);
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
-
-                // send response
-                httpServletResponse.getWriter().println(json);
-            } catch (OAuthProblemException e) {
-
-                this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_FORBIDDEN+ ": " + e.getMessage() + "!");
-
-                httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-                httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-                httpServletResponse.setContentType("application/json");
-                httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
-
-                // Error handling mit suppress_response_codes=true
-                if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                }
-                // Error handling mit suppress_response_codes=false (=default)
-                else {
-                    httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                }
-
-                // Json für Response body
-                RequestError requestError = new RequestError();
-                requestError.setError("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2"));
-                requestError.setCode(HttpServletResponse.SC_FORBIDDEN);
-                requestError.setDescription("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
-                requestError.setErrorUri("error." + this.config.getProperty(Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
-
-                StringWriter json = new StringWriter();
-                mapper.writeValue(json, requestError);
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
-
-                // send response
-                httpServletResponse.getWriter().println(json);
+            if (documents != null) {
+                // set Cookie with urlencoded DocumentList-JSON
+                StringWriter stringWriter = new StringWriter();
+                mapper.writeValue(stringWriter, documents);
+                Cookie cookie = new Cookie("PaiaServiceDocumentList", URLEncoder.encode(stringWriter.toString(), "UTF-8"));
+                cookie.setMaxAge(-1);
+                cookie.setPath("/");
+                httpServletResponse.addCookie(cookie);
             }
+
+            String redirect_url = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.core") + httpServletRequest.getPathInfo();
+            String login_url = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.auth") + "/login?redirect_url=" + redirect_url;
+
+            httpServletResponse.sendRedirect(login_url);
         }
     }
 
     /**
      * PAIAcore services: Prüfe jeweils die scopes und liefere die Daten
      */
-    private void paiaCore(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String token, String scope, String service, DocumentList documents) throws IOException {
+    private void paiaCore(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, DocumentList documents) throws IOException {
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -797,551 +733,948 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                     case "patron": {
 
-                        Patron patron = null;
-
-                        if (scope.equals("write_patron")) {
-                            patron = integratedLibrarySystem.patron(patronid, true);
-                        }
-                        else {
-                            patron = integratedLibrarySystem.patron(patronid, false);
-                        }
+                        Patron patron = integratedLibrarySystem.patron(patronid, false);
 
                         if (patron != null) {
 
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, patron);
-                            this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
 
-                            // If request contains parameter 'redirect_uri', then redirect mit access_token and patronid
-                            if (httpServletRequest.getParameter("redirect_uri") != null) {
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + "REDIRECT-URI ? " + httpServletRequest.getParameter("redirect_uri"));
+                            httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_patron");
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                                // sende nicht patronid und token mit redirect_url, falls beide schon enthalten waren
-                                // Dann ist die Information der beiden Parameter bereits ausgewertet und muss nicht mehr mitgesendet werden.
-                                // TODO Das geht so nicht, da die Parameter damit alternieren: einzige Lösung: verwende die PAIA.login()-Methode
-                                if (!httpServletRequest.getParameter("redirect_uri").contains("patron=")) {
+                            // XML-Ausgabe mit JAXB
+                            if (this.format.equals("xml")) {
 
-                                    if (httpServletRequest.getParameter("redirect_uri").contains("?")) {
+                                try {
 
-                                        httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "&patron=" + patronid + "&token=" + token);
+                                    JAXBContext context = JAXBContext.newInstance(Patron.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 
-                                    } else {
+                                    // Write to HttpResponse
+                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                                    m.marshal(patron, httpServletResponse.getWriter());
 
-                                        httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "?patron=" + patronid + "&token=" + token);
-                                    }
-                                }
-                                else {
-
-                                    if (httpServletRequest.getParameter("redirect_uri").contains("?patron")) {
-
-                                        httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri").split("\\?patron=")[0]);
-
-                                    } else if (httpServletRequest.getParameter("redirect_uri").contains("&patron")){
-
-                                        httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri").split("&patron=")[0]);
-
-                                    }
-                                    else {
-                                        // Tue nix
-                                    }
+                                } catch (JAXBException e) {
+                                    this.logger.error(e.getMessage(), e.getCause());
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
                                 }
                             }
-                            else {
 
-                                httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_patron");
-                                httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                                httpServletResponse.setContentType("application/json");
-                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                httpServletResponse.setHeader("Access-Control-Allow-Origin","*");
+                            // JSON-Ausgabe mit Jackson
+                            if (this.format.equals("json")) {
 
-                                httpServletResponse.getWriter().println(json);
+                                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                mapper.writeValue(httpServletResponse.getWriter(), patron);
+                            }
+
+                            // html
+                            if (this.format.equals("html")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(Patron.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    StringWriter stringWriter = new StringWriter();
+                                    m.marshal(patron, stringWriter);
+
+                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
+
+                                    HashMap<String,String> parameters = new HashMap<String,String>();
+                                    parameters.put("lang", this.language);
+                                    parameters.put("service", service);
+
+                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
+
+                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                    httpServletResponse.getWriter().println(html);
+
+                                }
+                                catch (JAXBException | JDOMException e) {
+                                    e.printStackTrace();
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                }
                             }
                         }
                         else {
 
-                            // TODO Was muss hier passieren?
+                            // Error handling mit suppress_response_codes=true
+                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            }
+                            // Error handling mit suppress_response_codes=false (=default)
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            }
+
+                            // Json für Response body
+                            RequestError requestError = new RequestError();
+                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                            requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+
+                            this.sendRequestError(httpServletResponse, requestError);
                         }
 
                         break;
                     }
                     case "fullpatron": {
 
-                        Patron patron = null;
-
-                        if (scope.equals("write_patron")) {
-                            patron = integratedLibrarySystem.patron(patronid, true);
-                        }
-                        else {
-                            patron = integratedLibrarySystem.patron(patronid, false);
-                        }
+                        Patron patron = integratedLibrarySystem.patron(patronid, true);
 
                         if (patron != null) {
 
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, patron);
-                            this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
 
-                            // If request contains parameter 'redirect_uri', then redirect mit access_token and patronid
-                            if (httpServletRequest.getParameter("redirect_uri") != null) {
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + "REDIRECT-URI ? " + httpServletRequest.getParameter("redirect_uri"));
+                            httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_patron");
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                                if (httpServletRequest.getParameter("redirect_uri").contains("?")) {
-                                    httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "&patron=" + patronid + "&token=" + token);
-                                }
-                                else {
-                                    httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "?patron=" + patronid + "&token=" + token);
+                            // XML-Ausgabe mit JAXB
+                            if (this.format.equals("xml")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(Patron.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                                    m.marshal(patron, httpServletResponse.getWriter());
+
+                                } catch (JAXBException e) {
+                                    this.logger.error(e.getMessage(), e.getCause());
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
                                 }
                             }
-                            else {
 
-                                httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_patron");
-                                httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                                httpServletResponse.setContentType("application/json");
-                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                httpServletResponse.setHeader("Access-Control-Allow-Origin","*");
+                            // JSON-Ausgabe mit Jackson
+                            if (this.format.equals("json")) {
 
-                                httpServletResponse.getWriter().println(json);
+                                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                mapper.writeValue(httpServletResponse.getWriter(), patron);
+                            }
+
+                            // html
+                            if (this.format.equals("html")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(Patron.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    StringWriter stringWriter = new StringWriter();
+                                    m.marshal(patron, stringWriter);
+
+                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
+
+                                    HashMap<String,String> parameters = new HashMap<String,String>();
+                                    parameters.put("lang", this.language);
+                                    parameters.put("service", service);
+
+                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
+
+                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                    httpServletResponse.getWriter().println(html);
+
+                                }
+                                catch (JAXBException | JDOMException e) {
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                }
                             }
                         }
                         else {
 
-                            // TODO Was muss hier passieren?
+                            // Error handling mit suppress_response_codes=true
+                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            }
+                            // Error handling mit suppress_response_codes=false (=default)
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            }
+
+                            // Json für Response body
+                            RequestError requestError = new RequestError();
+                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                            requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+
+                            this.sendRequestError(httpServletResponse, requestError);
                         }
 
                         break;
                     }
                     case "items": {
 
-                        DocumentList documentList = null;
-
-                        documentList = integratedLibrarySystem.items(patronid, "all");
+                        DocumentList documentList = integratedLibrarySystem.items(patronid, "all");
 
                         if (documentList != null) {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
 
-                            // If request contains parameter 'redirect_uri', then redirect mit access_token and patronid
-                            if (httpServletRequest.getParameter("redirect_uri") != null) {
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + "REDIRECT-URI ? " + httpServletRequest.getParameter("redirect_uri"));
+                            httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                                if (httpServletRequest.getParameter("redirect_uri").contains("?")) {
-                                    httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "&patron=" + patronid + "&token=" + token);
-                                }
-                                else {
-                                    httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "?patron=" + patronid + "&token=" + token);
+                            // XML-Ausgabe mit JAXB
+                            if (this.format.equals("xml")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                                    m.marshal(documentList, httpServletResponse.getWriter());
+
+                                } catch (JAXBException e) {
+                                    this.logger.error(e.getMessage(), e.getCause());
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
                                 }
                             }
-                            else {
 
-                                httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
-                                httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                                httpServletResponse.setContentType("application/json");
-                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                httpServletResponse.setHeader("Access-Control-Allow-Origin","*");
+                            // JSON-Ausgabe mit Jackson
+                            if (this.format.equals("json")) {
 
-                                httpServletResponse.getWriter().println(json);
+                                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                mapper.writeValue(httpServletResponse.getWriter(), documentList);
+                            }
+
+                            // html
+                            if (this.format.equals("html")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    StringWriter stringWriter = new StringWriter();
+                                    m.marshal(documentList, stringWriter);
+
+                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
+
+                                    HashMap<String,String> parameters = new HashMap<String,String>();
+                                    parameters.put("lang", this.language);
+                                    parameters.put("service", service);
+
+                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
+
+                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                    httpServletResponse.getWriter().println(html);
+
+                                }
+                                catch (JAXBException | JDOMException e) {
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                }
                             }
                         }
                         else {
 
-                            // TODO Was muss hier passieren?
+                            // Error handling mit suppress_response_codes=true
+                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            }
+                            // Error handling mit suppress_response_codes=false (=default)
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            }
+
+                            // Json für Response body
+                            RequestError requestError = new RequestError();
+                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                            requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+
+                            this.sendRequestError(httpServletResponse, requestError);
                         }
 
                         break;
                     }
                     case "items/borrowed": {
 
-                        DocumentList documentList = null;
-
-                        documentList = integratedLibrarySystem.items(patronid, "borrowed");
+                        DocumentList documentList = integratedLibrarySystem.items(patronid, "borrowed");
 
                         if (documentList != null) {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
 
-                            // If request contains parameter 'redirect_uri', then redirect mit access_token and patronid
-                            if (httpServletRequest.getParameter("redirect_uri") != null) {
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + "REDIRECT-URI ? " + httpServletRequest.getParameter("redirect_uri"));
+                            httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                                if (httpServletRequest.getParameter("redirect_uri").contains("?")) {
-                                    httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "&patron=" + patronid + "&token=" + token);
-                                }
-                                else {
-                                    httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "?patron=" + patronid + "&token=" + token);
+                            // XML-Ausgabe mit JAXB
+                            if (this.format.equals("xml")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                                    m.marshal(documentList, httpServletResponse.getWriter());
+
+                                } catch (JAXBException e) {
+                                    this.logger.error(e.getMessage(), e.getCause());
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
                                 }
                             }
-                            else {
 
-                                httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
-                                httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                                httpServletResponse.setContentType("application/json");
-                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                httpServletResponse.setHeader("Access-Control-Allow-Origin","*");
+                            // JSON-Ausgabe mit Jackson
+                            if (this.format.equals("json")) {
 
-                                httpServletResponse.getWriter().println(json);
+                                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                mapper.writeValue(httpServletResponse.getWriter(), documentList);
+                            }
+
+                            // html
+                            if (this.format.equals("html")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    StringWriter stringWriter = new StringWriter();
+                                    m.marshal(documentList, stringWriter);
+
+                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
+
+                                    HashMap<String,String> parameters = new HashMap<String,String>();
+                                    parameters.put("lang", this.language);
+                                    parameters.put("service", service);
+
+                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
+
+                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                    httpServletResponse.getWriter().println(html);
+
+                                }
+                                catch (JAXBException | JDOMException e) {
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                }
                             }
                         }
                         else {
 
-                            // TODO Was muss hier passieren?
+                            // Error handling mit suppress_response_codes=true
+                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            }
+                            // Error handling mit suppress_response_codes=false (=default)
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            }
+
+                            // Json für Response body
+                            RequestError requestError = new RequestError();
+                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                            requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+
+                            this.sendRequestError(httpServletResponse, requestError);
                         }
 
                         break;
                     }
                     case "items/ordered": {
 
-                        DocumentList documentList = null;
-
-                        documentList = integratedLibrarySystem.items(patronid, "ordered");
+                        DocumentList documentList = integratedLibrarySystem.items(patronid, "ordered");
 
                         if (documentList != null) {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
 
-                            // If request contains parameter 'redirect_uri', then redirect mit access_token and patronid
-                            if (httpServletRequest.getParameter("redirect_uri") != null) {
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + "REDIRECT-URI ? " + httpServletRequest.getParameter("redirect_uri"));
+                            httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                                if (httpServletRequest.getParameter("redirect_uri").contains("?")) {
-                                    httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "&patron=" + patronid + "&token=" + token);
-                                }
-                                else {
-                                    httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "?patron=" + patronid + "&token=" + token);
+                            // XML-Ausgabe mit JAXB
+                            if (this.format.equals("xml")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                                    m.marshal(documentList, httpServletResponse.getWriter());
+
+                                } catch (JAXBException e) {
+                                    this.logger.error(e.getMessage(), e.getCause());
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
                                 }
                             }
-                            else {
 
-                                httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
-                                httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                                httpServletResponse.setContentType("application/json");
-                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                httpServletResponse.setHeader("Access-Control-Allow-Origin","*");
+                            // JSON-Ausgabe mit Jackson
+                            if (this.format.equals("json")) {
 
-                                httpServletResponse.getWriter().println(json);
+                                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                mapper.writeValue(httpServletResponse.getWriter(), documentList);
+                            }
+
+                            // html
+                            if (this.format.equals("html")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    StringWriter stringWriter = new StringWriter();
+                                    m.marshal(documentList, stringWriter);
+
+                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
+
+                                    HashMap<String,String> parameters = new HashMap<String,String>();
+                                    parameters.put("lang", this.language);
+                                    parameters.put("service", service);
+
+                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
+
+                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                    httpServletResponse.getWriter().println(html);
+
+                                }
+                                catch (JAXBException | JDOMException e) {
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                }
                             }
                         }
                         else {
 
-                            // TODO Was muss hier passieren?
+                            // Error handling mit suppress_response_codes=true
+                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            }
+                            // Error handling mit suppress_response_codes=false (=default)
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            }
+
+                            // Json für Response body
+                            RequestError requestError = new RequestError();
+                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                            requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+
+                            this.sendRequestError(httpServletResponse, requestError);
                         }
 
                         break;
                     }
                     case "items/reserved": {
 
-                        DocumentList documentList = null;
-
-                        documentList = integratedLibrarySystem.items(patronid, "reserved");
+                        DocumentList documentList = integratedLibrarySystem.items(patronid, "reserved");
 
                         if (documentList != null) {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
 
-                            // If request contains parameter 'redirect_uri', then redirect mit access_token and patronid
-                            if (httpServletRequest.getParameter("redirect_uri") != null) {
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + "REDIRECT-URI ? " + httpServletRequest.getParameter("redirect_uri"));
+                            httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                                if (httpServletRequest.getParameter("redirect_uri").contains("?")) {
-                                    httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "&patron=" + patronid + "&token=" + token);
-                                }
-                                else {
-                                    httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "?patron=" + patronid + "&token=" + token);
+                            // XML-Ausgabe mit JAXB
+                            if (this.format.equals("xml")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                                    m.marshal(documentList, httpServletResponse.getWriter());
+
+                                } catch (JAXBException e) {
+                                    this.logger.error(e.getMessage(), e.getCause());
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
                                 }
                             }
-                            else {
 
-                                httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
-                                httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                                httpServletResponse.setContentType("application/json");
-                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                httpServletResponse.setHeader("Access-Control-Allow-Origin","*");
+                            // JSON-Ausgabe mit Jackson
+                            if (this.format.equals("json")) {
 
-                                httpServletResponse.getWriter().println(json);
+                                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                mapper.writeValue(httpServletResponse.getWriter(), documentList);
+                            }
+
+                            // html
+                            if (this.format.equals("html")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    StringWriter stringWriter = new StringWriter();
+                                    m.marshal(documentList, stringWriter);
+
+                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
+
+                                    HashMap<String,String> parameters = new HashMap<String,String>();
+                                    parameters.put("lang", this.language);
+                                    parameters.put("service", service);
+
+                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
+
+                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                    httpServletResponse.getWriter().println(html);
+
+                                }
+                                catch (JAXBException | JDOMException e) {
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                }
                             }
                         }
                         else {
 
-                            // TODO Was muss hier passieren?
+                            // Error handling mit suppress_response_codes=true
+                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            }
+                            // Error handling mit suppress_response_codes=false (=default)
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            }
+
+                            // Json für Response body
+                            RequestError requestError = new RequestError();
+                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                            requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+
+                            this.sendRequestError(httpServletResponse, requestError);
                         }
 
                         break;
                     }
                     case "request": {
 
-                        DocumentList documentList = null;
-
-                        documentList = integratedLibrarySystem.request(patronid, documents);
+                        DocumentList documentList = integratedLibrarySystem.request(patronid, documents);
 
                         if (documentList != null) {
 
-                            if (documentList.getDoc() != null && documentList.getDoc().size() > 0 && documentList.getDoc().get(0).getError() != null && !documentList.getDoc().get(0).getError().equals("")) {
+                            StringWriter json = new StringWriter();
+                            mapper.writeValue(json, documentList);
+                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
 
-                                StringWriter json = new StringWriter();
-                                mapper.writeValue(json, documentList);
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                            // delete DocumentList cookie
+                            Cookie cookie = new Cookie("PaiaServiceDocumentList", null);
+                            cookie.setMaxAge(0);
+                            httpServletResponse.addCookie(cookie);
 
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + httpServletRequest.getParameter("redirect_uri"));
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + httpServletRequest.getParameter("document_id"));
+                            httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                                if (httpServletRequest.getParameter("redirect_uri") != null && !httpServletRequest.getParameter("redirect_uri").equals("") && httpServletRequest.getParameter("document_id") != null && !httpServletRequest.getParameter("document_id").equals("")) {
+                            // XML-Ausgabe mit JAXB
+                            if (this.format.equals("xml")) {
 
-                                    String url = URLDecoder.decode(httpServletRequest.getParameter("redirect_uri"), "UTF-8");
-                                    url += "&patron=" + patronid + "&token=" + token;
-                                    url += "&document_id=" + httpServletRequest.getParameter("document_id");
-                                    url += "&error_request=" + documentList.getDoc().get(0).getError();
+                                try {
 
-                                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "REDIRECT-URL: " + url);
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 
-                                    httpServletResponse.sendRedirect(url);
+                                    // Write to HttpResponse
+                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                                    m.marshal(documentList, httpServletResponse.getWriter());
 
-                                } else {
-
-                                    httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
-                                    httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                                    httpServletResponse.setContentType("application/json");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                                    httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
-
-                                    httpServletResponse.getWriter().println(json);
+                                } catch (JAXBException e) {
+                                    this.logger.error(e.getMessage(), e.getCause());
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
                                 }
+                            }
 
-                            } else {
+                            // JSON-Ausgabe mit Jackson
+                            if (this.format.equals("json")) {
 
-                                StringWriter json = new StringWriter();
-                                mapper.writeValue(json, documentList);
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                mapper.writeValue(httpServletResponse.getWriter(), documentList);
+                            }
 
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + httpServletRequest.getParameter("redirect_uri"));
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + httpServletRequest.getParameter("document_id"));
+                            // html
+                            if (this.format.equals("html")) {
 
-                                if (httpServletRequest.getParameter("redirect_uri") != null && !httpServletRequest.getParameter("redirect_uri").equals("") && httpServletRequest.getParameter("document_id") != null && !httpServletRequest.getParameter("document_id").equals("")) {
+                                try {
 
-                                    String url = URLDecoder.decode(httpServletRequest.getParameter("redirect_uri"), "UTF-8");
-                                    url += "&patron=" + patronid + "&token=" + token;
-                                    url += "&document_id=" + httpServletRequest.getParameter("document_id");
-                                    if (documentList.getDoc() != null && documentList.getDoc().size() > 0 && documentList.getDoc().get(0).getError() != null) {
-                                        url += "&error_request=" + documentList.getDoc().get(0).getError();
-                                    }
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 
-                                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "REDIRECT-URL: " + url);
+                                    // Write to HttpResponse
+                                    StringWriter stringWriter = new StringWriter();
+                                    m.marshal(documentList, stringWriter);
 
-                                    httpServletResponse.sendRedirect(url);
+                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
 
-                                } else {
-                                    httpServletResponse.setContentType("application/json");
+                                    HashMap<String,String> parameters = new HashMap<String,String>();
+                                    parameters.put("lang", this.language);
+                                    parameters.put("service", service);
+
+                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
+
+                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
                                     httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+                                    httpServletResponse.getWriter().println(html);
 
-                                    httpServletResponse.getWriter().println(json);
+                                }
+                                catch (JAXBException | JDOMException e) {
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
                                 }
                             }
                         }
                         else {
 
-                            // TODO Was muss hier passieren?
+                            // Error handling mit suppress_response_codes=true
+                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            }
+                            // Error handling mit suppress_response_codes=false (=default)
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            }
+
+                            // Json für Response body
+                            RequestError requestError = new RequestError();
+                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                            requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+
+                            this.sendRequestError(httpServletResponse, requestError);
                         }
 
                         break;
                     }
                     case "renew": {
 
-                        DocumentList documentList = null;
-
-                        documentList = integratedLibrarySystem.renew(patronid, documents);
+                        DocumentList documentList = integratedLibrarySystem.renew(patronid, documents);
 
                         if (documentList != null) {
 
-                            if (documentList.getDoc() != null && documentList.getDoc().size() > 0 && documentList.getDoc().get(0).getError() != null && !documentList.getDoc().get(0).getError().equals("")) {
+                            StringWriter json = new StringWriter();
+                            mapper.writeValue(json, documentList);
+                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
 
-                                StringWriter json = new StringWriter();
-                                mapper.writeValue(json, documentList);
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                            // delete DocumentList cookie
+                            Cookie cookie = new Cookie("PaiaServiceDocumentList", null);
+                            cookie.setMaxAge(0);
+                            httpServletResponse.addCookie(cookie);
 
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + httpServletRequest.getParameter("redirect_uri"));
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + httpServletRequest.getParameter("document_id"));
+                            httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                                if (httpServletRequest.getParameter("redirect_uri") != null && !httpServletRequest.getParameter("redirect_uri").equals("") && httpServletRequest.getParameter("document_id") != null && !httpServletRequest.getParameter("document_id").equals("")) {
+                            // XML-Ausgabe mit JAXB
+                            if (this.format.equals("xml")) {
 
-                                    String url = URLDecoder.decode(httpServletRequest.getParameter("redirect_uri"), "UTF-8");
-                                    url += "&patron=" + patronid + "&token=" + token;
-                                    url += "&document_id=" + httpServletRequest.getParameter("document_id");
-                                    if (documentList.getDoc() != null && documentList.getDoc().size() > 0 && documentList.getDoc().get(0).getError() != null) {
-                                        url += "&error_request=" + documentList.getDoc().get(0).getError();
-                                    }
+                                try {
 
-                                    this.logger.debug("REDIRECT-URL: " + url);
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 
-                                    httpServletResponse.sendRedirect(url);
+                                    // Write to HttpResponse
+                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                                    m.marshal(documentList, httpServletResponse.getWriter());
 
-                                } else {
-
-                                    httpServletResponse.setContentType("application/json");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                                    httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
-
-                                    httpServletResponse.getWriter().println(json);
+                                } catch (JAXBException e) {
+                                    this.logger.error(e.getMessage(), e.getCause());
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
                                 }
-
                             }
-                            else {
 
-                                StringWriter json = new StringWriter();
-                                mapper.writeValue(json, documentList);
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                            // JSON-Ausgabe mit Jackson
+                            if (this.format.equals("json")) {
 
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + httpServletRequest.getParameter("redirect_uri"));
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + httpServletRequest.getParameter("document_id"));
+                                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                mapper.writeValue(httpServletResponse.getWriter(), documentList);
+                            }
 
-                                if (httpServletRequest.getParameter("redirect_uri") != null && !httpServletRequest.getParameter("redirect_uri").equals("") && httpServletRequest.getParameter("document_id") != null && !httpServletRequest.getParameter("document_id").equals("")) {
+                            // html
+                            if (this.format.equals("html")) {
 
-                                    String url = URLDecoder.decode(httpServletRequest.getParameter("redirect_uri"), "UTF-8");
-                                    url += "&patron=" + patronid + "&token=" + token;
-                                    url += "&document_id=" + httpServletRequest.getParameter("document_id");
+                                try {
 
-                                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "REDIRECT-URL: " + url);
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 
-                                    httpServletResponse.sendRedirect(url);
+                                    // Write to HttpResponse
+                                    StringWriter stringWriter = new StringWriter();
+                                    m.marshal(documentList, stringWriter);
 
-                                } else {
+                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
 
-                                    httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
-                                    httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                                    httpServletResponse.setContentType("application/json");
+                                    HashMap<String,String> parameters = new HashMap<String,String>();
+                                    parameters.put("lang", this.language);
+                                    parameters.put("service", service);
+
+                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
+
+                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
                                     httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+                                    httpServletResponse.getWriter().println(html);
 
-                                    httpServletResponse.getWriter().println(json);
+                                }
+                                catch (JAXBException | JDOMException e) {
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
                                 }
                             }
                         }
                         else {
 
-                            // TODO Was muss hier passieren?
+                            // Error handling mit suppress_response_codes=true
+                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            }
+                            // Error handling mit suppress_response_codes=false (=default)
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            }
+
+                            // Json für Response body
+                            RequestError requestError = new RequestError();
+                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                            requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+
+                            this.sendRequestError(httpServletResponse, requestError);
                         }
 
                         break;
                     }
                     case "cancel": {
 
-                        DocumentList documentList = null;
-
-                        documentList = integratedLibrarySystem.cancel(patronid, documents);
+                        DocumentList documentList = integratedLibrarySystem.cancel(patronid, documents);
 
                         if (documentList != null) {
 
-                            if (documentList.getDoc() != null && documentList.getDoc().size() > 0 && documentList.getDoc().get(0).getError() != null && !documentList.getDoc().get(0).getError().equals("")) {
+                            StringWriter json = new StringWriter();
+                            mapper.writeValue(json, documentList);
+                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
 
-                                StringWriter json = new StringWriter();
-                                mapper.writeValue(json, documentList);
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                            // delete DocumentList cookie
+                            Cookie cookie = new Cookie("PaiaServiceDocumentList", null);
+                            cookie.setMaxAge(0);
+                            httpServletResponse.addCookie(cookie);
 
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + httpServletRequest.getParameter("redirect_uri"));
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + httpServletRequest.getParameter("document_id"));
+                            httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                                if (httpServletRequest.getParameter("redirect_uri") != null && !httpServletRequest.getParameter("redirect_uri").equals("") && httpServletRequest.getParameter("document_id") != null && !httpServletRequest.getParameter("document_id").equals("")) {
+                            // XML-Ausgabe mit JAXB
+                            if (this.format.equals("xml")) {
 
-                                    String url = URLDecoder.decode(httpServletRequest.getParameter("redirect_uri"), "UTF-8");
-                                    url += "&patron=" + patronid + "&token=" + token;
-                                    url += "&document_id=" + httpServletRequest.getParameter("document_id");
-                                    url += "&error_request=" + documentList.getDoc().get(0).getError();
+                                try {
 
-                                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "REDIRECT-URL: " + url);
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 
-                                    httpServletResponse.sendRedirect(url);
+                                    // Write to HttpResponse
+                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                                    m.marshal(documentList, httpServletResponse.getWriter());
 
-                                } else {
-
-                                    httpServletResponse.setContentType("application/json");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_FORBIDDEN);
-                                    httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
-
-                                    httpServletResponse.getWriter().println(json);
+                                } catch (JAXBException e) {
+                                    this.logger.error(e.getMessage(), e.getCause());
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
                                 }
-
                             }
-                            else {
 
-                                StringWriter json = new StringWriter();
-                                mapper = new ObjectMapper();
-                                mapper.writeValue(json, documentList);
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                            // JSON-Ausgabe mit Jackson
+                            if (this.format.equals("json")) {
 
-                                // If request contains parameter 'redirect_uri', then redirect mit access_token and patronid
-                                if (httpServletRequest.getParameter("redirect_uri") != null) {
-                                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "REDIRECT-URI ? " + httpServletRequest.getParameter("redirect_uri"));
+                                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                mapper.writeValue(httpServletResponse.getWriter(), documentList);
+                            }
 
-                                    if (httpServletRequest.getParameter("redirect_uri").contains("?")) {
-                                        httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "&patron=" + patronid + "&token=" + token);
-                                    } else {
-                                        httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "?patron=" + patronid + "&token=" + token);
-                                    }
+                            // html
+                            if (this.format.equals("html")) {
 
-                                } else {
+                                try {
 
-                                    httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
-                                    httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                                    httpServletResponse.setContentType("application/json");
+                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    StringWriter stringWriter = new StringWriter();
+                                    m.marshal(documentList, stringWriter);
+
+                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
+
+                                    HashMap<String,String> parameters = new HashMap<String,String>();
+                                    parameters.put("lang", this.language);
+                                    parameters.put("service", service);
+
+                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
+
+                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
                                     httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+                                    httpServletResponse.getWriter().println(html);
 
-                                    httpServletResponse.getWriter().println(json);
+                                }
+                                catch (JAXBException | JDOMException e) {
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
                                 }
                             }
                         }
                         else {
 
-                            // TODO Was muss hier passieren?
+                            // Error handling mit suppress_response_codes=true
+                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            }
+                            // Error handling mit suppress_response_codes=false (=default)
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            }
+
+                            // Json für Response body
+                            RequestError requestError = new RequestError();
+                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                            requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+
+                            this.sendRequestError(httpServletResponse, requestError);
                         }
 
                         break;
                     }
                     case "fees": {
 
-                        FeeList feeList = null;
-
-                        feeList = integratedLibrarySystem.fees(patronid);
+                        FeeList feeList = integratedLibrarySystem.fees(patronid);
 
                         if (feeList != null) {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, feeList);
-                            this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
 
-                            // If request contains parameter 'redirect_uri', then redirect mit access_token and patronid
-                            if (httpServletRequest.getParameter("redirect_uri") != null) {
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + "REDIRECT-URI ? " + httpServletRequest.getParameter("redirect_uri"));
+                            httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_fees");
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                                if (httpServletRequest.getParameter("redirect_uri").contains("?")) {
-                                    httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "&patron=" + patronid + "&token=" + token);
-                                }
-                                else {
-                                    httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_uri") + "?patron=" + patronid + "&token=" + token);
+                            // XML-Ausgabe mit JAXB
+                            if (this.format.equals("xml")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(FeeList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                                    m.marshal(feeList, httpServletResponse.getWriter());
+
+                                } catch (JAXBException e) {
+                                    this.logger.error(e.getMessage(), e.getCause());
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
                                 }
                             }
-                            else {
 
-                                httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_fees");
-                                httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                                httpServletResponse.setContentType("application/json");
-                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                httpServletResponse.setHeader("Access-Control-Allow-Origin","*");
+                            // JSON-Ausgabe mit Jackson
+                            if (this.format.equals("json")) {
 
-                                httpServletResponse.getWriter().println(json);
+                                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                mapper.writeValue(httpServletResponse.getWriter(), feeList);
+                            }
+
+                            // html
+                            if (this.format.equals("html")) {
+
+                                try {
+
+                                    JAXBContext context = JAXBContext.newInstance(FeeList.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    StringWriter stringWriter = new StringWriter();
+                                    m.marshal(feeList, stringWriter);
+
+                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
+
+                                    HashMap<String,String> parameters = new HashMap<String,String>();
+                                    parameters.put("lang", this.language);
+                                    parameters.put("service", service);
+
+                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
+
+                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                    httpServletResponse.getWriter().println(html);
+
+                                }
+                                catch (JAXBException | JDOMException e) {
+                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                }
                             }
                         }
                         else {
 
-                            // TODO Was muss hier passieren?
+                            // Error handling mit suppress_response_codes=true
+                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            }
+                            // Error handling mit suppress_response_codes=false (=default)
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            }
+
+                            // Json für Response body
+                            RequestError requestError = new RequestError();
+                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                            requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+
+                            this.sendRequestError(httpServletResponse, requestError);
                         }
 
                         break;
@@ -1352,14 +1685,10 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                 StringWriter json = new StringWriter();
 
+                // TODO Frage nach "570-unknown patron" ist nicht gut! Lösung: Welche Typen von ILSExceptions treten auf? Erzeuge für jeden Typ eine eigene Exception!
                 if (e.getMessage().contains("570-unknown patron")) {
 
-                    this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_NOT_FOUND + ": '" + patronid + "'");
-
-                    httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-                    httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-                    httpServletResponse.setContentType("application/json");
-                    httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+                    this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_NOT_FOUND + ": '" + patronid + "'");
 
                     // Error handling mit suppress_response_codes=true
                     if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -1377,17 +1706,11 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_FOUND) + ".description"));
                     requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_FOUND) + ".uri"));
 
-                    mapper.writeValue(json, requestError);
-                    this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                    this.sendRequestError(httpServletResponse, requestError);
                 }
                 else {
 
-                    this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_SERVICE_UNAVAILABLE + ": ILS!");
-
-                    httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-                    httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-                    httpServletResponse.setContentType("application/json");
-                    httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+                    this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_SERVICE_UNAVAILABLE + ": ILS!");
 
                     // Error handling mit suppress_response_codes=true
                     if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -1405,12 +1728,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                     requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                    mapper.writeValue(json, requestError);
-                    this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
+                    this.sendRequestError(httpServletResponse, requestError);
                 }
-
-                // send response
-                httpServletResponse.getWriter().println(json);
             }
             catch (Exception e) {
 
@@ -1419,12 +1738,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
         }
         else {
 
-            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_SERVICE_UNAVAILABLE+ ": Config Error!");
-
-            httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-            httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-            httpServletResponse.setContentType("application/json");
-            httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+            this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_SERVICE_UNAVAILABLE + ": Config Error!");
 
             // Error handling mit suppress_response_codes=true
             if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -1442,12 +1756,132 @@ public class PaiaCoreEndpoint extends HttpServlet {
             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-            StringWriter json = new StringWriter();
-            mapper.writeValue(json, requestError);
-            this.logger.debug("[" + config.getProperty("service.name") + "] " + json);
-
-            // send response
-            httpServletResponse.getWriter().println(json);
+            this.sendRequestError(httpServletResponse, requestError);
         }
+    }
+
+    private void sendRequestError(HttpServletResponse httpServletResponse, RequestError requestError) {
+
+        ObjectMapper mapper = new ObjectMapper();
+
+        httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
+        httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA core\"");
+        httpServletResponse.setContentType("application/json");
+
+        try {
+
+            // XML-Ausgabe mit JAXB
+            if (this.format.equals("xml")) {
+
+                try {
+
+                    JAXBContext context = JAXBContext.newInstance(RequestError.class);
+                    Marshaller m = context.createMarshaller();
+                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                    // Write to HttpResponse
+                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                    m.marshal(requestError, httpServletResponse.getWriter());
+                } catch (JAXBException e) {
+                    this.logger.error(e.getMessage(), e.getCause());
+                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
+                }
+            }
+
+            // JSON-Ausgabe mit Jackson
+            if (this.format.equals("json")) {
+
+                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                mapper.writeValue(httpServletResponse.getWriter(), requestError);
+            }
+
+            // html
+            if (this.format.equals("html")) {
+
+                try {
+
+                    JAXBContext context = JAXBContext.newInstance(RequestError.class);
+                    Marshaller m = context.createMarshaller();
+                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                    // Write to HttpResponse
+                    StringWriter stringWriter = new StringWriter();
+                    m.marshal(requestError, stringWriter);
+
+                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
+
+                    HashMap<String, String> parameters = new HashMap<String, String>();
+                    parameters.put("lang", this.language);
+                    parameters.put("redirect_uri_params", URLDecoder.decode(this.redirect_url, "UTF-8"));
+
+                    String html = htmlOutputter(doc, this.config.getProperty("service.requesterror.xslt"), parameters);
+
+                    httpServletResponse.setContentType("text/html;charset=UTF-8");
+                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                    httpServletResponse.getWriter().println(html);
+
+                } catch (JAXBException e) {
+                    this.logger.error(e.getMessage(), e.getCause());
+                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                } catch (JDOMException e) {
+                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                }
+            }
+        }
+        catch (Exception e) {
+
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * This method transforms a XML document to HTML via a given XSLT stylesheet. It respects a map of additional parameters.
+     *
+     * @param doc
+     * @param xslt
+     * @param params
+     * @return
+     * @throws IOException
+     */
+    private String htmlOutputter(org.jdom2.Document doc, String xslt, HashMap<String,String> params) throws IOException {
+
+        String result = null;
+
+        try {
+
+            // Init XSLT-Transformer
+            Processor processor = new Processor(false);
+            XsltCompiler xsltCompiler = processor.newXsltCompiler();
+            XsltExecutable xsltExecutable = xsltCompiler.compile(new StreamSource(xslt));
+
+
+            XdmNode source = processor.newDocumentBuilder().build(new JDOMSource( doc ));
+            Serializer out = new Serializer();
+            out.setOutputProperty(Serializer.Property.METHOD, "html");
+            out.setOutputProperty(Serializer.Property.INDENT, "yes");
+
+            StringWriter buffer = new StringWriter();
+            out.setOutputWriter(new PrintWriter( buffer ));
+
+            XsltTransformer trans = xsltExecutable.load();
+            trans.setInitialContextNode(source);
+            trans.setDestination(out);
+
+            if (params != null) {
+                for (String p : params.keySet()) {
+                    trans.setParameter(new QName(p), new XdmAtomicValue(params.get(p).toString()));
+                }
+            }
+
+            trans.transform();
+
+            result = buffer.toString();
+
+        } catch (SaxonApiException e) {
+
+            this.logger.error("SaxonApiException: " + e.getMessage());
+        }
+
+        return result;
     }
 }

@@ -30,7 +30,7 @@ SOFTWARE.
     <xsl:output method="html" doctype-system="about:legacy-compat" indent="yes" encoding="UTF-8" />
 
     <xsl:param name="lang" select="'de'" />
-    <xsl:param name="redirect_uri_params" select="''" />
+    <xsl:param name="service" select="''" />
 
     <xsl:variable name="titel" select="'Ihr Konto'" />
     <xsl:variable name="titel-en" select="'Ihr Konto'" />
@@ -43,6 +43,8 @@ SOFTWARE.
     <xsl:include href="http://www.ub.tu-dortmund.de/head-en.xsl"/> <!-- Variable 'titel-en' angeben -->
     <xsl:include href="http://www.ub.tu-dortmund.de/oben-en.xsl"/> <!-- Variable 'anwendung-en' angeben -->
     <xsl:include href="http://www.ub.tu-dortmund.de/unten-en.xsl"/>
+
+    <!-- habe: <xsl:variable name="actionURL" select="concat($formURL, '/paia/auth/authorize')" />-->
 
     <xsl:template match="/">
 
@@ -79,12 +81,32 @@ SOFTWARE.
                         <h1><a id="inhalt" name="inhalt"></a>Ihr Konto</h1>
 
                         <h2>
-                            <xsl:value-of select="'Request Error'" />
+                            <xsl:if test="$service = 'patron'"><xsl:value-of select="'Benutzerdaten'" /></xsl:if>
+                            <xsl:if test="contains($service,'items')"><xsl:value-of select="'Ausleihen, Vormerkungen, Bereitstellungen'" /></xsl:if>
+                            <xsl:if test="$service = 'fees'"><xsl:value-of select="'Gebühren'" /></xsl:if>
                         </h2>
 
-                        <xsl:for-each select="//requesterror/*">
-                            <p><strong><xsl:value-of select="concat(name(.),': ')" /></strong><span class="rot"><xsl:value-of select="." /></span></p>
-                        </xsl:for-each>
+                        <xsl:if test="$service = 'patron'">
+                            <xsl:for-each select="//patron/*">
+                                <p><strong><xsl:value-of select="concat(name(.),': ')" /></strong><xsl:value-of select="." /></p>
+                            </xsl:for-each>
+                        </xsl:if>
+                        <xsl:if test="contains($service,'items')">
+                            <xsl:for-each select="//docs/doc">
+                                <xsl:for-each select="./*">
+                                    <p><strong><xsl:value-of select="concat(name(.),': ')" /></strong><xsl:value-of select="." /></p>
+                                </xsl:for-each>
+                                <hr/>
+                            </xsl:for-each>
+                        </xsl:if>
+                        <xsl:if test="$service = 'fees'">
+                            <xsl:for-each select="//fees/fee">
+                                <xsl:for-each select="./*">
+                                    <p><strong><xsl:value-of select="concat(name(.),': ')" /></strong><xsl:value-of select="." /></p>
+                                </xsl:for-each>
+                                <hr/>
+                            </xsl:for-each>
+                        </xsl:if>
 
                         <p id="date">05.05.15</p>
                     </div>

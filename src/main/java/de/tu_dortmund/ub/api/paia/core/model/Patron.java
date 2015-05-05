@@ -29,10 +29,12 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import javax.mail.internet.InternetAddress;
 import javax.xml.bind.annotation.XmlElement;
+import javax.xml.bind.annotation.XmlRootElement;
 
 /**
  * Created by cihabe on 10.10.14.
  */
+@XmlRootElement(name = "patron")
 @JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
 public class Patron {
 

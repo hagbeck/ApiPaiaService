@@ -1,7 +1,6 @@
 package de.tu_dortmund.ub.api.paia.core.ils;
 
-import com.sybase.jdbc2.jdbc.SybDriver;
-import de.tu_dortmund.ub.api.paia.core.ils.model.Patron;
+import de.tu_dortmund.ub.api.paia.core.model.Patron;
 import de.tu_dortmund.ub.api.paia.core.model.Document;
 import de.tu_dortmund.ub.api.paia.core.model.DocumentList;
 import de.tu_dortmund.ub.api.paia.core.model.Fee;
@@ -45,7 +44,6 @@ import javax.xml.rpc.Stub;
 import java.io.*;
 import java.net.URLEncoder;
 import java.rmi.RemoteException;
-import java.sql.*;
 import java.util.ArrayList;
 import java.util.Properties;
 
@@ -71,7 +69,7 @@ public class IlsSunRise implements IntegratedLibrarySystem {
     public Patron patron(String patronid, boolean extended) throws ILSException {
 
         Patron patron = new Patron();
-        patron.setAccount(patronid);
+        patron.setUsername(patronid);
 
         this.logger.debug("patronid = " + patronid);
         String borrowerNumber = this.getBorrowerNumber(patronid);

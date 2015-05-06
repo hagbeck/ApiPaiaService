@@ -38,13 +38,13 @@ import javax.xml.bind.annotation.XmlRootElement;
 @JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
 public class Patron {
 
-    private String name = "";
+    private String name;
 
     // valide E-Mail-Adresse
-    private InternetAddress email = null;
+    private InternetAddress email;
 
     // YYYY-MM-DD
-    private String expires = null;
+    private String expires;
 
     // 0 - active
     // 1 - inactive
@@ -53,9 +53,21 @@ public class Patron {
     // 4 - inactive because account expired and outstanding fees
     private int status = -1;
 
-    private String username = "";
-    private String old_password = "";
-    private String new_password = "";
+    private String username;
+    private String old_password;
+    private String new_password;
+
+    // additional parameters
+    private String gender;
+    private String dateofbirth;
+    private String city;
+    private String postalcode;
+    private String addresssupplement;
+    private String street;
+    private String usergroup;
+    private String externalid;
+    private String faculty;
+
 
     @XmlElement
     public String getName() {
@@ -127,4 +139,96 @@ public class Patron {
     public void setNew_password(String new_password) {
         this.new_password = new_password;
     }
+
+    @XmlElement
+    public String getGender() {
+        return gender;
+    }
+
+    public void setGender(String gender) {
+
+        if (gender.equals("M")) {
+            this.gender = "1";
+        }
+        else if (gender.equals("F")) {
+            this.gender = "2";
+        }
+        else {
+            this.gender = gender;
+        }
+    }
+
+    @XmlElement
+    public String getDateofbirth() {
+        return dateofbirth;
+    }
+
+    public void setDateofbirth(String dateofbirth) {
+        String tmp[] = dateofbirth.split("\\.");
+        this.dateofbirth = tmp[2] + "-" + tmp[1] + "-" + tmp[0];
+    }
+
+    @XmlElement
+    public String getCity() {
+        return city;
+    }
+
+    public void setCity(String city) {
+        this.city = city;
+    }
+
+    @XmlElement
+    public String getPostalcode() {
+        return postalcode;
+    }
+
+    public void setPostalcode(String postalcode) {
+        this.postalcode = postalcode;
+    }
+
+    @XmlElement
+    public String getAddresssupplement() {
+        return addresssupplement;
+    }
+
+    public void setAddresssupplement(String addresssupplement) {
+        this.addresssupplement = addresssupplement;
+    }
+
+    @XmlElement
+    public String getStreet() {
+        return street;
+    }
+
+    public void setStreet(String street) {
+        this.street = street;
+    }
+
+    @XmlElement
+    public String getUsergroup() {
+        return usergroup;
+    }
+
+    public void setUsergroup(String usergroup) {
+        this.usergroup = usergroup;
+    }
+
+    @XmlElement
+    public String getExternalid() {
+        return externalid;
+    }
+
+    public void setExternalid(String externalid) {
+        this.externalid = externalid;
+    }
+
+    @XmlElement
+    public String getFaculty() {
+        return faculty;
+    }
+
+    public void setFaculty(String faculty) {
+        this.faculty = faculty;
+    }
+
 }

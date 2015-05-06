@@ -24,7 +24,7 @@ SOFTWARE.
 
 package de.tu_dortmund.ub.api.paia.core.ils;
 
-import de.tu_dortmund.ub.api.paia.core.ils.model.Patron;
+import de.tu_dortmund.ub.api.paia.core.model.Patron;
 import de.tu_dortmund.ub.api.paia.core.model.DocumentList;
 import de.tu_dortmund.ub.api.paia.core.model.FeeList;
 

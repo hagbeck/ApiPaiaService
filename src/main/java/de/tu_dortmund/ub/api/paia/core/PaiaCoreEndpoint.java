@@ -225,8 +225,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
         this.logger.info("redirect_url = " + this.redirect_url);
 
-        httpServletResponse.setHeader("Access-Control-Allow-Origin","*");
-
         this.language = "";
 
         // PAIA core - function
@@ -307,6 +305,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                 }
             }
+
+            httpServletResponse.setHeader("Access-Control-Allow-Origin","*");
 
             // check token ...
             try {
@@ -724,7 +724,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                     case "patron": {
 
-                        de.tu_dortmund.ub.api.paia.core.ils.model.Patron patron = integratedLibrarySystem.patron(patronid, false);
+                        Patron patron = integratedLibrarySystem.patron(patronid, false);
 
                         if (patron != null) {
 
@@ -819,7 +819,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "fullpatron": {
 
-                        de.tu_dortmund.ub.api.paia.core.ils.model.Patron patron = integratedLibrarySystem.patron(patronid, true);
+                        Patron patron = integratedLibrarySystem.patron(patronid, true);
 
                         if (patron != null) {
 

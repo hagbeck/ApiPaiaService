@@ -76,6 +76,10 @@ public class PaiaAuthEndpoint extends HttpServlet {
     private Properties config = new Properties();
     private Logger logger = Logger.getLogger(PaiaAuthEndpoint.class.getName());
 
+    private String format;
+    private String language;
+    private String redirect_url;
+
     /**
      *
      * @throws java.io.IOException
@@ -149,7 +153,10 @@ public class PaiaAuthEndpoint extends HttpServlet {
             service = params[0];
         }
 
-        // 1. Schritt: Hole 'Accept' und 'Authorization' aus dem Header;
+        this.format = "html";
+        this.language = "";
+
+        // Hole 'Accept' und 'Authorization' aus dem Header;
         Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
         while ( headerNames.hasMoreElements() ) {
 
@@ -157,7 +164,22 @@ public class PaiaAuthEndpoint extends HttpServlet {
             this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "headerNameKey = " + headerNameKey + " / headerNameValue = " + httpServletRequest.getHeader(headerNameKey));
 
             if (headerNameKey.equals("Accept")) {
-                accept = httpServletRequest.getHeader( headerNameKey );
+
+                this.logger.debug("headerNameKey = " + httpServletRequest.getHeader( headerNameKey ));
+
+                if (httpServletRequest.getHeader( headerNameKey ).contains("text/html")) {
+                    this.format = "html";
+                }
+                else if (httpServletRequest.getHeader( headerNameKey ).contains("application/xml")) {
+                    this.format = "xml";
+                }
+                else if (httpServletRequest.getHeader( headerNameKey ).contains("application/json")) {
+                    this.format = "json";
+                }
+            }
+            if (headerNameKey.equals("Accept-Language")) {
+                this.language = httpServletRequest.getHeader( headerNameKey );
+                this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept-Language: " + this.language);
             }
             if (headerNameKey.equals("Authorization")) {
                 authorization = httpServletRequest.getHeader( headerNameKey );
@@ -170,6 +192,41 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 }
             }
         }
+
+        this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "Service: " + service);
+
+        if (httpServletRequest.getParameter("format") != null && !httpServletRequest.getParameter("format").equals("")) {
+
+            this.format = httpServletRequest.getParameter("format");
+        }
+
+        this.logger.info("format = " + this.format);
+
+        // redirect_url
+        this.redirect_url = "";
+
+        if (httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
+
+            this.redirect_url = httpServletRequest.getParameter("redirect_url");
+        }
+
+        this.logger.info("redirect_url = " + this.redirect_url);
+
+        // language
+        if (this.language.startsWith("de")) {
+            this.language = "de";
+        }
+        else if (this.language.startsWith("en")) {
+            this.language = "en";
+        }
+        else if (httpServletRequest.getParameter("l") != null) {
+            this.language = httpServletRequest.getParameter("l");
+        }
+        else {
+            this.language = "de";
+        }
+
+        this.logger.info("language = " + this.language);
 
         if (access_token.equals("") && httpServletRequest.getParameter("access_token") != null) {
 
@@ -200,8 +257,6 @@ public class PaiaAuthEndpoint extends HttpServlet {
             }
         }
 
-        this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "Service: " + service);
-        this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "Accept: " + accept);
         this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "Access_token: " + access_token);
 
         StringBuffer jb = new StringBuffer();
@@ -214,6 +269,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
         String requestBody = jb.toString();
 
+        httpServletResponse.setHeader("Access-Control-Allow-Origin","*");
+
         // 2. Schritt: Service
         if (service.equals("login") || service.equals("logout") || service.equals("change")) {
 
@@ -222,11 +279,6 @@ public class PaiaAuthEndpoint extends HttpServlet {
         else {
 
             this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_METHOD_NOT_ALLOWED + ": " + "POST for '" + service + "' not allowed!");
-
-            httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-            httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Auth\"");
-            httpServletResponse.setContentType("application/json");
-            httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
 
             // Error handling mit suppress_response_codes=true
             if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -244,12 +296,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
 
-            StringWriter json = new StringWriter();
-            mapper.writeValue(json, requestError);
-            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
-
-            // send response
-            httpServletResponse.getWriter().println(json);
+            this.sendRequestError(httpServletResponse, requestError);
         }
     }
 
@@ -269,37 +316,6 @@ public class PaiaAuthEndpoint extends HttpServlet {
     private void paiaAuth(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String service, String access_token, String requestBody) throws IOException {
 
         ObjectMapper mapper = new ObjectMapper();
-
-        String format = "html";
-
-        if (httpServletRequest.getParameter("format") != null && !httpServletRequest.getParameter("format").equals("")) {
-
-            format = httpServletRequest.getParameter("format");
-        }
-        else {
-
-            Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
-            while ( headerNames.hasMoreElements() ) {
-                String headerNameKey = headerNames.nextElement();
-
-                if (headerNameKey.equals("Accept")) {
-
-                    this.logger.debug("headerNameKey = " + httpServletRequest.getHeader( headerNameKey ));
-
-                    if (httpServletRequest.getHeader( headerNameKey ).contains("text/html")) {
-                        format = "html";
-                    }
-                    else if (httpServletRequest.getHeader( headerNameKey ).contains("application/xml")) {
-                        format = "xml";
-                    }
-                    else if (httpServletRequest.getHeader( headerNameKey ).contains("application/json")) {
-                        format = "json";
-                    }
-                }
-            }
-        }
-
-        this.logger.info("format = " + format);
 
         String redirect_url = "";
 
@@ -529,11 +545,6 @@ public class PaiaAuthEndpoint extends HttpServlet {
                     }
                     else {
 
-                        httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-                        httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA auth\"");
-                        httpServletResponse.setContentType("application/json");
-                        httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
-
                         // Error handling mit suppress_response_codes=true
                         if (httpServletRequest.getParameter("suppress_response_codes") != null) {
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -550,65 +561,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
                         requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
 
-                        // XML-Ausgabe mit JAXB
-                        if (format.equals("xml")) {
-
-                            try {
-
-                                JAXBContext context = JAXBContext.newInstance(RequestError.class);
-                                Marshaller m = context.createMarshaller();
-                                m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                // Write to HttpResponse
-                                httpServletResponse.setContentType("application/xml;charset=UTF-8");
-                                m.marshal(requestError, httpServletResponse.getWriter());
-                            } catch (JAXBException e) {
-                                this.logger.error(e.getMessage(), e.getCause());
-                                httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
-                            }
-                        }
-
-                        // JSON-Ausgabe mit Jackson
-                        if (format.equals("json")) {
-
-                            httpServletResponse.setContentType("application/json;charset=UTF-8");
-                            mapper.writeValue(httpServletResponse.getWriter(), requestError);
-                        }
-
-                        // html
-                        if (format.equals("html")) {
-
-                            try {
-
-                                JAXBContext context = JAXBContext.newInstance(RequestError.class);
-                                Marshaller m = context.createMarshaller();
-                                m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                // Write to HttpResponse
-                                StringWriter stringWriter = new StringWriter();
-                                m.marshal(requestError, stringWriter);
-
-                                Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                                HashMap<String,String> parameters = new HashMap<String,String>();
-                                parameters.put("lang", "de");
-                                parameters.put("redirect_uri_params", URLDecoder.decode(redirect_url, "UTF-8"));
-
-                                String html = htmlOutputter(doc, this.config.getProperty("service.requesterror.xslt"), parameters);
-
-                                httpServletResponse.setContentType("text/html;charset=UTF-8");
-                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                httpServletResponse.getWriter().println(html);
-
-                            }
-                            catch (JAXBException e) {
-                                this.logger.error(e.getMessage(), e.getCause());
-                                httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                            }
-                            catch (JDOMException e) {
-                                httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                            }
-                        }
+                        this.sendRequestError(httpServletResponse, requestError);
                     }
                 }
                 // else Baue HTML-Seite mit login-Formular mittels XSLT
@@ -760,11 +713,6 @@ public class PaiaAuthEndpoint extends HttpServlet {
             }
             case "change": {
 
-                httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-                httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-                httpServletResponse.setContentType("application/json");
-                httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
-
                 // Error handling mit suppress_response_codes=true
                 if (httpServletRequest.getParameter("suppress_response_codes") != null && !httpServletRequest.getParameter("suppress_response_codes").equals("")) {
                     httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -781,80 +729,13 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_IMPLEMENTED) + ".description"));
                 requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_IMPLEMENTED) + ".uri"));
 
-                // XML-Ausgabe mit JAXB
-                if (format.equals("xml")) {
-
-                    try {
-
-                        JAXBContext context = JAXBContext.newInstance(RequestError.class);
-                        Marshaller m = context.createMarshaller();
-                        m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                        // Write to HttpResponse
-                        httpServletResponse.setContentType("application/xml;charset=UTF-8");
-                        m.marshal(requestError, httpServletResponse.getWriter());
-                    }
-                    catch (PropertyException e) {
-                        this.logger.error(e.getMessage(), e.getCause());
-                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
-                    } catch (JAXBException e) {
-                        this.logger.error(e.getMessage(), e.getCause());
-                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
-                    }
-                }
-
-                // JSON-Ausgabe mit Jackson
-                if (format.equals("json")) {
-
-                    httpServletResponse.setContentType("application/json;charset=UTF-8");
-                    mapper.writeValue(httpServletResponse.getWriter(), requestError);
-                }
-
-                // html
-                if (format.equals("html")) {
-
-                    try {
-
-                        JAXBContext context = JAXBContext.newInstance(RequestError.class);
-                        Marshaller m = context.createMarshaller();
-                        m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                        // Write to HttpResponse
-                        StringWriter stringWriter = new StringWriter();
-                        m.marshal(requestError, stringWriter);
-
-                        Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                        HashMap<String,String> parameters = new HashMap<String,String>();
-                        parameters.put("lang", "de");
-                        parameters.put("redirect_uri_params", URLDecoder.decode(redirect_url, "UTF-8"));
-
-                        String html = htmlOutputter(doc, this.config.getProperty("service.requesterror.xslt"), parameters);
-
-                        httpServletResponse.setContentType("text/html;charset=UTF-8");
-                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                        httpServletResponse.getWriter().println(html);
-
-                    }
-                    catch (JAXBException e) {
-                        this.logger.error(e.getMessage(), e.getCause());
-                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message. Message is 'Document not found'.");
-                    }
-                    catch (JDOMException e) {
-                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message. Message is 'Document not found'.");
-                    }
-                }
+                this.sendRequestError(httpServletResponse, requestError);
 
                 break;
             }
             default: {
 
                 this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_BAD_REQUEST + "Unknown function! (" + service + ")");
-
-                httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
-                httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA Core\"");
-                httpServletResponse.setContentType("application/json");
-                httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
 
                 // Error handling mit suppress_response_codes=true
                 if (httpServletRequest.getParameter("suppress_response_codes") != null && !httpServletRequest.getParameter("suppress_response_codes").equals("")) {
@@ -872,70 +753,82 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".description"));
                 requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".uri"));
 
-                // XML-Ausgabe mit JAXB
-                if (format.equals("xml")) {
+                this.sendRequestError(httpServletResponse, requestError);
+            }
+        }
+    }
 
-                    try {
+    private void sendRequestError(HttpServletResponse httpServletResponse, RequestError requestError) {
 
-                        JAXBContext context = JAXBContext.newInstance(RequestError.class);
-                        Marshaller m = context.createMarshaller();
-                        m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+        ObjectMapper mapper = new ObjectMapper();
 
-                        // Write to HttpResponse
-                        httpServletResponse.setContentType("application/xml;charset=UTF-8");
-                        m.marshal(requestError, httpServletResponse.getWriter());
-                    }
-                    catch (PropertyException e) {
-                        this.logger.error(e.getMessage(), e.getCause());
-                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
-                    } catch (JAXBException e) {
-                        this.logger.error(e.getMessage(), e.getCause());
-                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
-                    }
-                }
+        httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
+        httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA auth\"");
+        httpServletResponse.setContentType("application/json");
 
-                // JSON-Ausgabe mit Jackson
-                if (format.equals("json")) {
+        try {
 
-                    httpServletResponse.setContentType("application/json;charset=UTF-8");
-                    mapper.writeValue(httpServletResponse.getWriter(), requestError);
-                }
+            // XML-Ausgabe mit JAXB
+            if (this.format.equals("xml")) {
 
-                // html
-                if (format.equals("html")) {
+                try {
 
-                    try {
+                    JAXBContext context = JAXBContext.newInstance(RequestError.class);
+                    Marshaller m = context.createMarshaller();
+                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
 
-                        JAXBContext context = JAXBContext.newInstance(RequestError.class);
-                        Marshaller m = context.createMarshaller();
-                        m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                        // Write to HttpResponse
-                        StringWriter stringWriter = new StringWriter();
-                        m.marshal(requestError, stringWriter);
-
-                        Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                        HashMap<String,String> parameters = new HashMap<String,String>();
-                        parameters.put("lang", "de");
-                        parameters.put("redirect_uri_params", URLDecoder.decode(redirect_url, "UTF-8"));
-
-                        String html = htmlOutputter(doc, this.config.getProperty("service.requesterror.xslt"), parameters);
-
-                        httpServletResponse.setContentType("text/html;charset=UTF-8");
-                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                        httpServletResponse.getWriter().println(html);
-
-                    }
-                    catch (JAXBException e) {
-                        this.logger.error(e.getMessage(), e.getCause());
-                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message. Message is 'Document not found'.");
-                    }
-                    catch (JDOMException e) {
-                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message. Message is 'Document not found'.");
-                    }
+                    // Write to HttpResponse
+                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                    m.marshal(requestError, httpServletResponse.getWriter());
+                } catch (JAXBException e) {
+                    this.logger.error(e.getMessage(), e.getCause());
+                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
                 }
             }
+
+            // JSON-Ausgabe mit Jackson
+            if (this.format.equals("json")) {
+
+                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                mapper.writeValue(httpServletResponse.getWriter(), requestError);
+            }
+
+            // html
+            if (this.format.equals("html")) {
+
+                try {
+
+                    JAXBContext context = JAXBContext.newInstance(RequestError.class);
+                    Marshaller m = context.createMarshaller();
+                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                    // Write to HttpResponse
+                    StringWriter stringWriter = new StringWriter();
+                    m.marshal(requestError, stringWriter);
+
+                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
+
+                    HashMap<String, String> parameters = new HashMap<String, String>();
+                    parameters.put("lang", this.language);
+                    parameters.put("redirect_uri_params", URLDecoder.decode(this.redirect_url, "UTF-8"));
+
+                    String html = htmlOutputter(doc, this.config.getProperty("service.requesterror.xslt"), parameters);
+
+                    httpServletResponse.setContentType("text/html;charset=UTF-8");
+                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                    httpServletResponse.getWriter().println(html);
+
+                } catch (JAXBException e) {
+                    this.logger.error(e.getMessage(), e.getCause());
+                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                } catch (JDOMException e) {
+                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                }
+            }
+        }
+        catch (Exception e) {
+
+            e.printStackTrace();
         }
     }
 

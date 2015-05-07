@@ -3,46 +3,33 @@
 ##########################
 
 # general configuration
-service.id=Diep-RuR_2k15
+service.id=
 service.name=PaiaService
-service.base_url=http://localhost:9003
+service.base_url=http://host[:port]
 
 # logging configuration
-service.log4j-conf=conf/paia.log4j.properties
+service.log4j-conf=/path/to/log4j properties file
 
 # auth configuration
-service.auth.apikeys=F:\\DEV\\Projects\\DataManagement\\ManageCryptedApiKeyFile\\data\\dieprur.rub.keys
-service.auth.ubdo.tokenendpoint=http://129.217.132.134:9020/oauth20/tokens
-service.auth.ubdo.client_id=9bc32d455ad77af3b7485f82fe4664e9c57fe67
-service.auth.ubdo.client_secret=5d82e24184eff7361b5a3135a0ea8af61b62b81295f2d4f88be18b288efee981
+service.auth.apikeys=/path/to/file
+service.oauth20.tokenendpoint=http://tokenendpoint
+service.oauth20.client_id=
+service.oauth20.client_secret=
 
 # server configuration
-service.port=9003
-service.contextPath=/
+service.port=port
+service.contextPath=context path
 
 # service configuration
-service.resourceBase=webapp
-service.endpoint.core=/core
-service.endpoint.auth=/auth
-service.endpoint.auth.login.xslt=xslt/paia.auth.login.xslt
-service.endpoint.core.service.xslt=xslt/paia.core.service.xslt
-service.requesterror.xslt=xslt/paia.requesterror.xslt
+service.resourceBase=/path/to/static/webpages
+service.endpoint.core=/app-path/to/core
+service.endpoint.auth=/app-path/to/auth
 
 ### CORS parameter ###
 Access-Control-Allow-Methods=GET, POST, OPTIONS
 Access-Control-Allow-Headers=Authorization, Accept, Content-Type, Origin
-Accept=application/json
+Accept=application/json, application/xml
 Access-Control-Allow-Origin=*
-
-##################
-# ILS Parameters #
-##################
-
-ils.xslnp.service.url=http://129.217.132.134:8091/XSLNP/ws1/
-ils.xslnp.admin=xslnp
-ils.xslnp.adminpw=testxslnp
-ils.xslnp.lang=de
-ils.xslnp.SLNPOpsHitListPresent.tries=15
 
 ###########################
 # PaiaService Error Codes #

@@ -348,11 +348,11 @@ public class PaiaAuthEndpoint extends HttpServlet {
                     CloseableHttpClient httpclient = HttpClients.createDefault();
 
                     String tokenRequestBody = "{ \"access_token\"=\"" + access_token + "\","
-                            + "\"client_id\"=\"" + this.config.getProperty("service.auth.ubdo.client_id") + "\","
-                            + "\"client_secret\"=\"" + this.config.getProperty("service.auth.ubdo.client_secret") + "\""
+                            + "\"client_id\"=\"" + this.config.getProperty("service.oauth20.client_id") + "\","
+                            + "\"client_secret\"=\"" + this.config.getProperty("service.oauth20.client_secret") + "\""
                             + "}";
 
-                    HttpPost httpPost = new HttpPost(this.config.getProperty("service.auth.ubdo.tokenendpoint") + "/revoke");
+                    HttpPost httpPost = new HttpPost(this.config.getProperty("service.oauth20.tokenendpoint") + "/revoke");
                     StringEntity stringEntity = new StringEntity(tokenRequestBody, ContentType.create("application/json", Consts.UTF_8));
                     httpPost.setEntity(stringEntity);
 
@@ -459,10 +459,10 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         String tokenRequestBody = "grant_type=password&username=" + loginRequest.getUsername()
                                 + "&password=" + loginRequest.getPassword()
                                 + "&scope=" + scope
-                                + "&client_id=" + this.config.getProperty("service.auth.ubdo.client_id")
-                                + "&client_secret=" + this.config.getProperty("service.auth.ubdo.client_secret");
+                                + "&client_id=" + this.config.getProperty("service.oauth20.client_id")
+                                + "&client_secret=" + this.config.getProperty("service.oauth20.client_secret");
 
-                        HttpPost httpPost = new HttpPost(this.config.getProperty("service.auth.ubdo.tokenendpoint"));
+                        HttpPost httpPost = new HttpPost(this.config.getProperty("service.oauth20.tokenendpoint"));
                         StringEntity stringEntity = new StringEntity(tokenRequestBody, ContentType.create("application/x-www-form-urlencoded", Consts.UTF_8));
                         httpPost.setEntity(stringEntity);
 
@@ -671,11 +671,11 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 CloseableHttpClient httpclient = HttpClients.createDefault();
 
                 String tokenRequestBody = "{ \"access_token\"=\"" + access_token + "\","
-                        + "\"client_id\"=\"" + this.config.getProperty("service.auth.ubdo.client_id") + "\","
-                        + "\"client_secret\"=\"" + this.config.getProperty("service.auth.ubdo.client_secret") + "\""
+                        + "\"client_id\"=\"" + this.config.getProperty("service.oauth20.client_id") + "\","
+                        + "\"client_secret\"=\"" + this.config.getProperty("service.oauth20.client_secret") + "\""
                         + "}";
 
-                HttpPost httpPost = new HttpPost(this.config.getProperty("service.auth.ubdo.tokenendpoint") + "/revoke");
+                HttpPost httpPost = new HttpPost(this.config.getProperty("service.oauth20.tokenendpoint") + "/revoke");
                 StringEntity stringEntity = new StringEntity(tokenRequestBody, ContentType.create("application/json", Consts.UTF_8));
                 httpPost.setEntity(stringEntity);
 

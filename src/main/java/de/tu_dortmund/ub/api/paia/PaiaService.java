@@ -36,7 +36,6 @@ import org.eclipse.jetty.servlet.ServletHolder;
 
 import java.io.*;
 import java.util.Properties;
-import java.util.Scanner;
 
 public class PaiaService {
 

@@ -540,9 +540,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
         try {
 
-            if (this.config.getProperty("service.auth.ubdo.tokenendpoint") != null && !this.config.getProperty("service.auth.ubdo.tokenendpoint").equals("")) {
+            if (this.config.getProperty("service.oauth20.tokenendpoint") != null && !this.config.getProperty("service.oauth20.tokenendpoint").equals("")) {
 
-                String url = this.config.getProperty("service.auth.ubdo.tokenendpoint") + "/validate?token=" + access_token;
+                String url = this.config.getProperty("service.oauth20.tokenendpoint") + "/validate?token=" + access_token;
                 this.logger.debug("[" + config.getProperty("service.name") + "] " + "TOKEN-ENDPOINT-URL: " + url);
                 HttpGet httpGet = new HttpGet(url);
 

@@ -35,7 +35,8 @@ import de.tu_dortmund.ub.api.paia.core.model.DocumentList;
 import de.tu_dortmund.ub.api.paia.core.model.FeeList;
 import de.tu_dortmund.ub.api.paia.model.RequestError;
 import de.tu_dortmund.ub.util.impl.Lookup;
-import net.sf.saxon.s9api.*;
+import de.tu_dortmund.ub.util.output.ObjectToHtmlTransformation;
+import de.tu_dortmund.ub.util.output.TransformationException;
 import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -45,9 +46,6 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
-import org.jdom2.JDOMException;
-import org.jdom2.input.SAXBuilder;
-import org.jdom2.transform.JDOMSource;
 
 import javax.json.Json;
 import javax.json.JsonObject;
@@ -60,7 +58,6 @@ import javax.servlet.http.HttpServletResponse;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
-import javax.xml.transform.stream.StreamSource;
 import java.io.*;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
@@ -70,7 +67,10 @@ import java.util.HashMap;
 import java.util.Properties;
 
 /**
- * Created by cihabe on 05.02.14.
+ * This class represents the PAIA Core component.
+ *
+ * @author Hans-Georg Becker
+ * @version 2015-05-06
  */
 public class PaiaCoreEndpoint extends HttpServlet {
 
@@ -143,7 +143,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
      */
     protected void doGet(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) throws ServletException, IOException {
 
-        this.doPost(httpServletRequest,httpServletResponse);
+        this.doPost(httpServletRequest, httpServletResponse);
     }
 
     /**
@@ -216,212 +216,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
         this.logger.info("format = " + this.format);
 
-        this.redirect_url = "";
+        if (this.format.equals("html") && Lookup.lookupAll(ObjectToHtmlTransformation.class).size() == 0) {
 
-        if (httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
-
-            this.redirect_url = httpServletRequest.getParameter("redirect_url");
-        }
-
-        this.logger.info("redirect_url = " + this.redirect_url);
-
-        this.language = "";
-
-        // PAIA core - function
-        if ( (httpServletRequest.getMethod().equals("GET") && (service.equals("patron") || service.equals("fullpatron") || service.equals("items") || service.startsWith("items/ordered") || service.startsWith("items/borrowed") || service.startsWith("items/reserved") || service.equals("fees")) ) ||
-                (httpServletRequest.getMethod().equals("POST") && (service.equals("request") || service.equals("renew") || service.equals("cancel"))) ) {
-
-            // 1. Schritt: Hole 'Accept' und 'Authorization' aus dem Header;
-            Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
-            while ( headerNames.hasMoreElements() ) {
-
-                String headerNameKey = (String) headerNames.nextElement();
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + "headerNameKey = " + headerNameKey + " / headerNameValue = " + httpServletRequest.getHeader(headerNameKey));
-
-                if (headerNameKey.equals("Accept-Language")) {
-                    this.language = httpServletRequest.getHeader( headerNameKey );
-                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept-Language: " + this.language);
-                }
-                if (headerNameKey.equals("Accept")) {
-                    accept = httpServletRequest.getHeader( headerNameKey );
-                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept: " + accept);
-                }
-                if (headerNameKey.equals("Authorization")) {
-                    authorization = httpServletRequest.getHeader( headerNameKey );
-                }
-            }
-
-            // language
-            if (this.language.startsWith("de")) {
-                this.language = "de";
-            }
-            else if (this.language.startsWith("en")) {
-                this.language = "en";
-            }
-            else if (httpServletRequest.getParameter("l") != null) {
-                this.language = httpServletRequest.getParameter("l");
-            }
-            else {
-                this.language = "de";
-            }
-
-            // read rquestBody
-            StringBuffer jb = new StringBuffer();
-            String line = null;
-            try {
-                BufferedReader reader = httpServletRequest.getReader();
-                while ((line = reader.readLine()) != null)
-                    jb.append(line);
-            } catch (Exception e) { /*report an error*/ }
-
-            String requestBody = jb.toString();
-
-            // if not exists token: read request parameter
-            if (authorization.equals("") && httpServletRequest.getParameter("access_token") != null && !httpServletRequest.getParameter("access_token").equals("")) {
-                authorization = httpServletRequest.getParameter("access_token");
-            }
-
-            // if not exists token
-            if (authorization.equals("")) {
-
-                // if exists PaiaService-Cookie: read content
-                Cookie[] cookies = httpServletRequest.getCookies();
-
-                if (cookies != null) {
-                    for (Cookie cookie : cookies) {
-                        if (cookie.getName().equals("PaiaService")) {
-
-                            String value = URLDecoder.decode(cookie.getValue(), "UTF-8");
-                            this.logger.info(value);
-                            LoginResponse loginResponse = mapper.readValue(value, LoginResponse.class);
-
-                            // A C H T U N G: ggf. andere patronID im Cookie als in Request (UniAccount vs. BibAccount)
-                            if (loginResponse.getPatron().equals(patronid)) {
-                                authorization = loginResponse.getAccess_token();
-                            }
-
-                            break;
-                        }
-                    }
-                }
-            }
-
-            httpServletResponse.setHeader("Access-Control-Allow-Origin","*");
-
-            // check token ...
-            try {
-
-                boolean isAuthorized = false;
-
-                if (!authorization.equals("")) {
-                    // ... against local OAuth 2.0 service
-                    isAuthorized = this.checkToken(httpServletResponse, service, authorization);
-                }
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
-
-                // ... - if not is authorized - against DFN-AAI service
-                if (!isAuthorized) {
-
-                    // TODO if exists OpenAM-Session-Cookie: read content
-                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
-                }
-
-                // read document list
-                DocumentList documentList = null;
-
-                try {
-
-                    // read DocumentList
-                    documentList = mapper.readValue(requestBody, DocumentList.class);
-                }
-                catch (Exception e) {
-
-                    if (!requestBody.equals("")) {
-
-                        String[] params = requestBody.split("&");
-
-                        if (params.length > 1) {
-
-                            documentList = new DocumentList();
-                            documentList.setDoc(new ArrayList<Document>());
-
-                            for (String param : params) {
-
-                                if (param.startsWith("document_id")) {
-                                    Document document = new Document();
-                                    document.setEdition(param.split("=")[1]);
-                                    documentList.getDoc().add(document);
-                                }
-                            }
-                        }
-                    }
-                    else if (httpServletRequest.getParameter("document_id") != null && !httpServletRequest.getParameter("document_id").equals("")) {
-
-                        Document document = new Document();
-                        document.setEdition(httpServletRequest.getParameter("document_id"));
-
-                        documentList = new DocumentList();
-                        documentList.setDoc(new ArrayList<Document>());
-                        documentList.getDoc().add(document);
-                    }
-                    else {
-
-                        // if exists cookie with name "PaiaServiceDocumentList": read it
-                        Cookie[] cookies = httpServletRequest.getCookies();
-
-                        if (cookies != null) {
-                            for (Cookie cookie : cookies) {
-                                if (cookie.getName().equals("PaiaServiceDocumentList")) {
-
-                                    if (cookie.getValue() != null && !cookie.getValue().equals("") && !cookie.getValue().equals("null")) {
-
-                                        String value = URLDecoder.decode(cookie.getValue(), "UTF-8");
-                                        this.logger.info(value);
-                                        documentList = mapper.readValue(value, DocumentList.class);
-                                    }
-
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-
-                if (isAuthorized) {
-
-                    // execute query
-                    this.paiaCore(httpServletRequest, httpServletResponse, patronid, service, documentList);
-                }
-                else {
-
-                    // Authorization
-                    this.authorize(httpServletRequest, httpServletResponse, service, patronid, documentList);
-                }
-
-            }
-            catch (PaiaServiceException e) {
-
-                // Error handling mit suppress_response_codes=true
-                if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                }
-                // Error handling mit suppress_response_codes=false (=default)
-                else {
-                    httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-                }
-
-                RequestError requestError = new RequestError();
-                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
-                requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
-                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
-
-                this.sendRequestError(httpServletResponse, requestError);
-            }
-        }
-        else {
-
-            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_METHOD_NOT_ALLOWED + ": " + httpServletRequest.getMethod() + " for '" + service + "' not allowed!");
+            this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_BAD_REQUEST + ": " + "html not implemented!");
 
             // Error handling mit suppress_response_codes=true
             if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -429,16 +226,235 @@ public class PaiaCoreEndpoint extends HttpServlet {
             }
             // Error handling mit suppress_response_codes=false (=default)
             else {
-                httpServletResponse.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+                httpServletResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
             }
 
+            // Json für Response body
             RequestError requestError = new RequestError();
-            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED)));
-            requestError.setCode(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
-            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
-            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
+            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST)));
+            requestError.setCode(HttpServletResponse.SC_BAD_REQUEST);
+            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".description"));
+            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".uri"));
 
             this.sendRequestError(httpServletResponse, requestError);
+        }
+        else {
+
+            this.redirect_url = "";
+
+            if (httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
+
+                this.redirect_url = httpServletRequest.getParameter("redirect_url");
+            }
+
+            this.logger.info("redirect_url = " + this.redirect_url);
+
+            this.language = "";
+
+            // PAIA core - function
+            if ((httpServletRequest.getMethod().equals("GET") && (service.equals("patron") || service.equals("fullpatron") || service.equals("items") || service.startsWith("items/ordered") || service.startsWith("items/borrowed") || service.startsWith("items/reserved") || service.equals("fees"))) ||
+                    (httpServletRequest.getMethod().equals("POST") && (service.equals("request") || service.equals("renew") || service.equals("cancel")))) {
+
+                // 1. Schritt: Hole 'Accept' und 'Authorization' aus dem Header;
+                Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
+                while (headerNames.hasMoreElements()) {
+
+                    String headerNameKey = (String) headerNames.nextElement();
+                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "headerNameKey = " + headerNameKey + " / headerNameValue = " + httpServletRequest.getHeader(headerNameKey));
+
+                    if (headerNameKey.equals("Accept-Language")) {
+                        this.language = httpServletRequest.getHeader(headerNameKey);
+                        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept-Language: " + this.language);
+                    }
+                    if (headerNameKey.equals("Accept")) {
+                        accept = httpServletRequest.getHeader(headerNameKey);
+                        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept: " + accept);
+                    }
+                    if (headerNameKey.equals("Authorization")) {
+                        authorization = httpServletRequest.getHeader(headerNameKey);
+                    }
+                }
+
+                // language
+                if (this.language.startsWith("de")) {
+                    this.language = "de";
+                } else if (this.language.startsWith("en")) {
+                    this.language = "en";
+                } else if (httpServletRequest.getParameter("l") != null) {
+                    this.language = httpServletRequest.getParameter("l");
+                } else {
+                    this.language = "de";
+                }
+
+                // read rquestBody
+                StringBuffer jb = new StringBuffer();
+                String line = null;
+                try {
+                    BufferedReader reader = httpServletRequest.getReader();
+                    while ((line = reader.readLine()) != null)
+                        jb.append(line);
+                } catch (Exception e) { /*report an error*/ }
+
+                String requestBody = jb.toString();
+
+                // if not exists token: read request parameter
+                if (authorization.equals("") && httpServletRequest.getParameter("access_token") != null && !httpServletRequest.getParameter("access_token").equals("")) {
+                    authorization = httpServletRequest.getParameter("access_token");
+                }
+
+                // if not exists token
+                if (authorization.equals("")) {
+
+                    // if exists PaiaService-Cookie: read content
+                    Cookie[] cookies = httpServletRequest.getCookies();
+
+                    if (cookies != null) {
+                        for (Cookie cookie : cookies) {
+                            if (cookie.getName().equals("PaiaService")) {
+
+                                String value = URLDecoder.decode(cookie.getValue(), "UTF-8");
+                                this.logger.info(value);
+                                LoginResponse loginResponse = mapper.readValue(value, LoginResponse.class);
+
+                                // A C H T U N G: ggf. andere patronID im Cookie als in Request (UniAccount vs. BibAccount)
+                                if (loginResponse.getPatron().equals(patronid)) {
+                                    authorization = loginResponse.getAccess_token();
+                                }
+
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+
+                // check token ...
+                try {
+
+                    boolean isAuthorized = false;
+
+                    if (!authorization.equals("")) {
+                        // ... against local OAuth 2.0 service
+                        isAuthorized = this.checkToken(httpServletResponse, service, authorization);
+                    }
+                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
+
+                    // ... - if not is authorized - against DFN-AAI service
+                    if (!isAuthorized) {
+
+                        // TODO if exists OpenAM-Session-Cookie: read content
+                        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
+                    }
+
+                    // read document list
+                    DocumentList documentList = null;
+
+                    try {
+
+                        // read DocumentList
+                        documentList = mapper.readValue(requestBody, DocumentList.class);
+                    } catch (Exception e) {
+
+                        if (!requestBody.equals("")) {
+
+                            String[] params = requestBody.split("&");
+
+                            if (params.length > 1) {
+
+                                documentList = new DocumentList();
+                                documentList.setDoc(new ArrayList<Document>());
+
+                                for (String param : params) {
+
+                                    if (param.startsWith("document_id")) {
+                                        Document document = new Document();
+                                        document.setEdition(param.split("=")[1]);
+                                        documentList.getDoc().add(document);
+                                    }
+                                }
+                            }
+                        } else if (httpServletRequest.getParameter("document_id") != null && !httpServletRequest.getParameter("document_id").equals("")) {
+
+                            Document document = new Document();
+                            document.setEdition(httpServletRequest.getParameter("document_id"));
+
+                            documentList = new DocumentList();
+                            documentList.setDoc(new ArrayList<Document>());
+                            documentList.getDoc().add(document);
+                        } else {
+
+                            // if exists cookie with name "PaiaServiceDocumentList": read it
+                            Cookie[] cookies = httpServletRequest.getCookies();
+
+                            if (cookies != null) {
+                                for (Cookie cookie : cookies) {
+                                    if (cookie.getName().equals("PaiaServiceDocumentList")) {
+
+                                        if (cookie.getValue() != null && !cookie.getValue().equals("") && !cookie.getValue().equals("null")) {
+
+                                            String value = URLDecoder.decode(cookie.getValue(), "UTF-8");
+                                            this.logger.info(value);
+                                            documentList = mapper.readValue(value, DocumentList.class);
+                                        }
+
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (isAuthorized) {
+
+                        // execute query
+                        this.paiaCore(httpServletRequest, httpServletResponse, patronid, service, documentList);
+                    } else {
+
+                        // Authorization
+                        this.authorize(httpServletRequest, httpServletResponse, service, patronid, documentList);
+                    }
+
+                } catch (PaiaServiceException e) {
+
+                    // Error handling mit suppress_response_codes=true
+                    if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                    }
+                    // Error handling mit suppress_response_codes=false (=default)
+                    else {
+                        httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                    }
+
+                    RequestError requestError = new RequestError();
+                    requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
+                    requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+                    requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
+                    requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
+
+                    this.sendRequestError(httpServletResponse, requestError);
+                }
+            } else {
+
+                this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_METHOD_NOT_ALLOWED + ": " + httpServletRequest.getMethod() + " for '" + service + "' not allowed!");
+
+                // Error handling mit suppress_response_codes=true
+                if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                }
+                // Error handling mit suppress_response_codes=false (=default)
+                else {
+                    httpServletResponse.setStatus(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+                }
+
+                RequestError requestError = new RequestError();
+                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED)));
+                requestError.setCode(HttpServletResponse.SC_METHOD_NOT_ALLOWED);
+                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
+                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
+
+                this.sendRequestError(httpServletResponse, requestError);
+            }
         }
     }
 
@@ -707,7 +723,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
     }
 
     /**
-     * PAIAcore services: Prüfe jeweils die scopes und liefere die Daten
+     * PAIA core services: Prüfe jeweils die scopes und liefere die Daten
      */
     private void paiaCore(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, DocumentList documents) throws IOException {
 
@@ -736,6 +752,33 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_patron");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
+                            if (this.format.equals("html")) {
+
+                                if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
+
+                                    try {
+                                        ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
+                                        // init transformator
+                                        htmlTransformation.init(this.config);
+
+                                        HashMap<String, String> parameters = new HashMap<String, String>();
+                                        parameters.put("lang", this.language);
+                                        parameters.put("service", service);
+
+                                        httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                        httpServletResponse.getWriter().println(htmlTransformation.transform(patron, parameters));
+                                    }
+                                    catch (TransformationException e) {
+                                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                    }
+                                }
+                                else {
+                                    this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
+                                    this.format = "json";
+                                }
+                            }
+
                             // XML-Ausgabe mit JAXB
                             if (this.format.equals("xml")) {
 
@@ -760,38 +803,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), patron);
-                            }
-
-                            // html
-                            if (this.format.equals("html")) {
-
-                                try {
-
-                                    JAXBContext context = JAXBContext.newInstance(Patron.class);
-                                    Marshaller m = context.createMarshaller();
-                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                    // Write to HttpResponse
-                                    StringWriter stringWriter = new StringWriter();
-                                    m.marshal(patron, stringWriter);
-
-                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                                    HashMap<String,String> parameters = new HashMap<String,String>();
-                                    parameters.put("lang", this.language);
-                                    parameters.put("service", service);
-
-                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
-
-                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.getWriter().println(html);
-
-                                }
-                                catch (JAXBException | JDOMException e) {
-                                    e.printStackTrace();
-                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                                }
                             }
                         }
                         else {
@@ -831,6 +842,33 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_patron");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
+                            if (this.format.equals("html")) {
+
+                                if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
+
+                                    try {
+                                        ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
+                                        // init transformator
+                                        htmlTransformation.init(this.config);
+
+                                        HashMap<String, String> parameters = new HashMap<String, String>();
+                                        parameters.put("lang", this.language);
+                                        parameters.put("service", service);
+
+                                        httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                        httpServletResponse.getWriter().println(htmlTransformation.transform(patron, parameters));
+                                    }
+                                    catch (TransformationException e) {
+                                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                    }
+                                }
+                                else {
+                                    this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
+                                    this.format = "json";
+                                }
+                            }
+
                             // XML-Ausgabe mit JAXB
                             if (this.format.equals("xml")) {
 
@@ -855,37 +893,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), patron);
-                            }
-
-                            // html
-                            if (this.format.equals("html")) {
-
-                                try {
-
-                                    JAXBContext context = JAXBContext.newInstance(Patron.class);
-                                    Marshaller m = context.createMarshaller();
-                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                    // Write to HttpResponse
-                                    StringWriter stringWriter = new StringWriter();
-                                    m.marshal(patron, stringWriter);
-
-                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                                    HashMap<String,String> parameters = new HashMap<String,String>();
-                                    parameters.put("lang", this.language);
-                                    parameters.put("service", service);
-
-                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
-
-                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.getWriter().println(html);
-
-                                }
-                                catch (JAXBException | JDOMException e) {
-                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                                }
                             }
                         }
                         else {
@@ -924,6 +931,33 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
+                            if (this.format.equals("html")) {
+
+                                if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
+
+                                    try {
+                                        ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
+                                        // init transformator
+                                        htmlTransformation.init(this.config);
+
+                                        HashMap<String, String> parameters = new HashMap<String, String>();
+                                        parameters.put("lang", this.language);
+                                        parameters.put("service", service);
+
+                                        httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                        httpServletResponse.getWriter().println(htmlTransformation.transform(documentList, parameters));
+                                    }
+                                    catch (TransformationException e) {
+                                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                    }
+                                }
+                                else {
+                                    this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
+                                    this.format = "json";
+                                }
+                            }
+
                             // XML-Ausgabe mit JAXB
                             if (this.format.equals("xml")) {
 
@@ -948,37 +982,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
-                            }
-
-                            // html
-                            if (this.format.equals("html")) {
-
-                                try {
-
-                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
-                                    Marshaller m = context.createMarshaller();
-                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                    // Write to HttpResponse
-                                    StringWriter stringWriter = new StringWriter();
-                                    m.marshal(documentList, stringWriter);
-
-                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                                    HashMap<String,String> parameters = new HashMap<String,String>();
-                                    parameters.put("lang", this.language);
-                                    parameters.put("service", service);
-
-                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
-
-                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.getWriter().println(html);
-
-                                }
-                                catch (JAXBException | JDOMException e) {
-                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                                }
                             }
                         }
                         else {
@@ -1017,6 +1020,33 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
+                            if (this.format.equals("html")) {
+
+                                if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
+
+                                    try {
+                                        ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
+                                        // init transformator
+                                        htmlTransformation.init(this.config);
+
+                                        HashMap<String, String> parameters = new HashMap<String, String>();
+                                        parameters.put("lang", this.language);
+                                        parameters.put("service", service);
+
+                                        httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                        httpServletResponse.getWriter().println(htmlTransformation.transform(documentList, parameters));
+                                    }
+                                    catch (TransformationException e) {
+                                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                    }
+                                }
+                                else {
+                                    this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
+                                    this.format = "json";
+                                }
+                            }
+
                             // XML-Ausgabe mit JAXB
                             if (this.format.equals("xml")) {
 
@@ -1041,37 +1071,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
-                            }
-
-                            // html
-                            if (this.format.equals("html")) {
-
-                                try {
-
-                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
-                                    Marshaller m = context.createMarshaller();
-                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                    // Write to HttpResponse
-                                    StringWriter stringWriter = new StringWriter();
-                                    m.marshal(documentList, stringWriter);
-
-                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                                    HashMap<String,String> parameters = new HashMap<String,String>();
-                                    parameters.put("lang", this.language);
-                                    parameters.put("service", service);
-
-                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
-
-                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.getWriter().println(html);
-
-                                }
-                                catch (JAXBException | JDOMException e) {
-                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                                }
                             }
                         }
                         else {
@@ -1110,6 +1109,33 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
+                            if (this.format.equals("html")) {
+
+                                if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
+
+                                    try {
+                                        ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
+                                        // init transformator
+                                        htmlTransformation.init(this.config);
+
+                                        HashMap<String, String> parameters = new HashMap<String, String>();
+                                        parameters.put("lang", this.language);
+                                        parameters.put("service", service);
+
+                                        httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                        httpServletResponse.getWriter().println(htmlTransformation.transform(documentList, parameters));
+                                    }
+                                    catch (TransformationException e) {
+                                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                    }
+                                }
+                                else {
+                                    this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
+                                    this.format = "json";
+                                }
+                            }
+
                             // XML-Ausgabe mit JAXB
                             if (this.format.equals("xml")) {
 
@@ -1134,37 +1160,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
-                            }
-
-                            // html
-                            if (this.format.equals("html")) {
-
-                                try {
-
-                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
-                                    Marshaller m = context.createMarshaller();
-                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                    // Write to HttpResponse
-                                    StringWriter stringWriter = new StringWriter();
-                                    m.marshal(documentList, stringWriter);
-
-                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                                    HashMap<String,String> parameters = new HashMap<String,String>();
-                                    parameters.put("lang", this.language);
-                                    parameters.put("service", service);
-
-                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
-
-                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.getWriter().println(html);
-
-                                }
-                                catch (JAXBException | JDOMException e) {
-                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                                }
                             }
                         }
                         else {
@@ -1203,6 +1198,33 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
+                            if (this.format.equals("html")) {
+
+                                if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
+
+                                    try {
+                                        ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
+                                        // init transformator
+                                        htmlTransformation.init(this.config);
+
+                                        HashMap<String, String> parameters = new HashMap<String, String>();
+                                        parameters.put("lang", this.language);
+                                        parameters.put("service", service);
+
+                                        httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                        httpServletResponse.getWriter().println(htmlTransformation.transform(documentList, parameters));
+                                    }
+                                    catch (TransformationException e) {
+                                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                    }
+                                }
+                                else {
+                                    this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
+                                    this.format = "json";
+                                }
+                            }
+
                             // XML-Ausgabe mit JAXB
                             if (this.format.equals("xml")) {
 
@@ -1227,37 +1249,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
-                            }
-
-                            // html
-                            if (this.format.equals("html")) {
-
-                                try {
-
-                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
-                                    Marshaller m = context.createMarshaller();
-                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                    // Write to HttpResponse
-                                    StringWriter stringWriter = new StringWriter();
-                                    m.marshal(documentList, stringWriter);
-
-                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                                    HashMap<String,String> parameters = new HashMap<String,String>();
-                                    parameters.put("lang", this.language);
-                                    parameters.put("service", service);
-
-                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
-
-                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.getWriter().println(html);
-
-                                }
-                                catch (JAXBException | JDOMException e) {
-                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                                }
                             }
                         }
                         else {
@@ -1301,6 +1292,33 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
+                            if (this.format.equals("html")) {
+
+                                if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
+
+                                    try {
+                                        ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
+                                        // init transformator
+                                        htmlTransformation.init(this.config);
+
+                                        HashMap<String, String> parameters = new HashMap<String, String>();
+                                        parameters.put("lang", this.language);
+                                        parameters.put("service", service);
+
+                                        httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                        httpServletResponse.getWriter().println(htmlTransformation.transform(documentList, parameters));
+                                    }
+                                    catch (TransformationException e) {
+                                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                    }
+                                }
+                                else {
+                                    this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
+                                    this.format = "json";
+                                }
+                            }
+
                             // XML-Ausgabe mit JAXB
                             if (this.format.equals("xml")) {
 
@@ -1325,37 +1343,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
-                            }
-
-                            // html
-                            if (this.format.equals("html")) {
-
-                                try {
-
-                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
-                                    Marshaller m = context.createMarshaller();
-                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                    // Write to HttpResponse
-                                    StringWriter stringWriter = new StringWriter();
-                                    m.marshal(documentList, stringWriter);
-
-                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                                    HashMap<String,String> parameters = new HashMap<String,String>();
-                                    parameters.put("lang", this.language);
-                                    parameters.put("service", service);
-
-                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
-
-                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.getWriter().println(html);
-
-                                }
-                                catch (JAXBException | JDOMException e) {
-                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                                }
                             }
                         }
                         else {
@@ -1399,6 +1386,33 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
+                            if (this.format.equals("html")) {
+
+                                if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
+
+                                    try {
+                                        ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
+                                        // init transformator
+                                        htmlTransformation.init(this.config);
+
+                                        HashMap<String, String> parameters = new HashMap<String, String>();
+                                        parameters.put("lang", this.language);
+                                        parameters.put("service", service);
+
+                                        httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                        httpServletResponse.getWriter().println(htmlTransformation.transform(documentList, parameters));
+                                    }
+                                    catch (TransformationException e) {
+                                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                    }
+                                }
+                                else {
+                                    this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
+                                    this.format = "json";
+                                }
+                            }
+
                             // XML-Ausgabe mit JAXB
                             if (this.format.equals("xml")) {
 
@@ -1423,37 +1437,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
-                            }
-
-                            // html
-                            if (this.format.equals("html")) {
-
-                                try {
-
-                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
-                                    Marshaller m = context.createMarshaller();
-                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                    // Write to HttpResponse
-                                    StringWriter stringWriter = new StringWriter();
-                                    m.marshal(documentList, stringWriter);
-
-                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                                    HashMap<String,String> parameters = new HashMap<String,String>();
-                                    parameters.put("lang", this.language);
-                                    parameters.put("service", service);
-
-                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
-
-                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.getWriter().println(html);
-
-                                }
-                                catch (JAXBException | JDOMException e) {
-                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                                }
                             }
                         }
                         else {
@@ -1497,6 +1480,33 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
+                            if (this.format.equals("html")) {
+
+                                if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
+
+                                    try {
+                                        ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
+                                        // init transformator
+                                        htmlTransformation.init(this.config);
+
+                                        HashMap<String, String> parameters = new HashMap<String, String>();
+                                        parameters.put("lang", this.language);
+                                        parameters.put("service", service);
+
+                                        httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                        httpServletResponse.getWriter().println(htmlTransformation.transform(documentList, parameters));
+                                    }
+                                    catch (TransformationException e) {
+                                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                    }
+                                }
+                                else {
+                                    this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
+                                    this.format = "json";
+                                }
+                            }
+
                             // XML-Ausgabe mit JAXB
                             if (this.format.equals("xml")) {
 
@@ -1521,37 +1531,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
-                            }
-
-                            // html
-                            if (this.format.equals("html")) {
-
-                                try {
-
-                                    JAXBContext context = JAXBContext.newInstance(DocumentList.class);
-                                    Marshaller m = context.createMarshaller();
-                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                    // Write to HttpResponse
-                                    StringWriter stringWriter = new StringWriter();
-                                    m.marshal(documentList, stringWriter);
-
-                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                                    HashMap<String,String> parameters = new HashMap<String,String>();
-                                    parameters.put("lang", this.language);
-                                    parameters.put("service", service);
-
-                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
-
-                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.getWriter().println(html);
-
-                                }
-                                catch (JAXBException | JDOMException e) {
-                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                                }
                             }
                         }
                         else {
@@ -1590,6 +1569,33 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_fees");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
+                            if (this.format.equals("html")) {
+
+                                if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
+
+                                    try {
+                                        ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
+                                        // init transformator
+                                        htmlTransformation.init(this.config);
+
+                                        HashMap<String, String> parameters = new HashMap<String, String>();
+                                        parameters.put("lang", this.language);
+                                        parameters.put("service", service);
+
+                                        httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                        httpServletResponse.getWriter().println(htmlTransformation.transform(feeList, parameters));
+                                    }
+                                    catch (TransformationException e) {
+                                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                    }
+                                }
+                                else {
+                                    this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
+                                    this.format = "json";
+                                }
+                            }
+
                             // XML-Ausgabe mit JAXB
                             if (this.format.equals("xml")) {
 
@@ -1614,37 +1620,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), feeList);
-                            }
-
-                            // html
-                            if (this.format.equals("html")) {
-
-                                try {
-
-                                    JAXBContext context = JAXBContext.newInstance(FeeList.class);
-                                    Marshaller m = context.createMarshaller();
-                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                    // Write to HttpResponse
-                                    StringWriter stringWriter = new StringWriter();
-                                    m.marshal(feeList, stringWriter);
-
-                                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                                    HashMap<String,String> parameters = new HashMap<String,String>();
-                                    parameters.put("lang", this.language);
-                                    parameters.put("service", service);
-
-                                    String html = htmlOutputter(doc, this.config.getProperty("service.endpoint.core.service.xslt"), parameters);
-
-                                    httpServletResponse.setContentType("text/html;charset=UTF-8");
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                    httpServletResponse.getWriter().println(html);
-
-                                }
-                                catch (JAXBException | JDOMException e) {
-                                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                                }
                             }
                         }
                         else {
@@ -1761,6 +1736,34 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
         try {
 
+            // html
+            if (this.format.equals("html")) {
+
+                if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
+
+                    try {
+                        ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
+                        // init transformator
+                        htmlTransformation.init(this.config);
+
+                        HashMap<String, String> parameters = new HashMap<String, String>();
+                        parameters.put("lang", this.language);
+                        parameters.put("redirect_uri_params", URLDecoder.decode(this.redirect_url, "UTF-8"));
+
+                        httpServletResponse.setContentType("text/html;charset=UTF-8");
+                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                        httpServletResponse.getWriter().println(htmlTransformation.transform(requestError, parameters));
+                    }
+                    catch (TransformationException e) {
+                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                    }
+                }
+                else {
+                    this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
+                    this.format = "json";
+                }
+            }
+
             // XML-Ausgabe mit JAXB
             if (this.format.equals("xml")) {
 
@@ -1785,94 +1788,10 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                 mapper.writeValue(httpServletResponse.getWriter(), requestError);
             }
-
-            // html
-            if (this.format.equals("html")) {
-
-                try {
-
-                    JAXBContext context = JAXBContext.newInstance(RequestError.class);
-                    Marshaller m = context.createMarshaller();
-                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                    // Write to HttpResponse
-                    StringWriter stringWriter = new StringWriter();
-                    m.marshal(requestError, stringWriter);
-
-                    org.jdom2.Document doc = new SAXBuilder().build(new StringReader(stringWriter.toString()));
-
-                    HashMap<String, String> parameters = new HashMap<String, String>();
-                    parameters.put("lang", this.language);
-                    parameters.put("redirect_uri_params", URLDecoder.decode(this.redirect_url, "UTF-8"));
-
-                    String html = htmlOutputter(doc, this.config.getProperty("service.requesterror.xslt"), parameters);
-
-                    httpServletResponse.setContentType("text/html;charset=UTF-8");
-                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                    httpServletResponse.getWriter().println(html);
-
-                } catch (JAXBException e) {
-                    this.logger.error(e.getMessage(), e.getCause());
-                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                } catch (JDOMException e) {
-                    httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
-                }
-            }
         }
         catch (Exception e) {
 
             e.printStackTrace();
         }
-    }
-
-    /**
-     * This method transforms a XML document to HTML via a given XSLT stylesheet. It respects a map of additional parameters.
-     *
-     * @param doc
-     * @param xslt
-     * @param params
-     * @return
-     * @throws IOException
-     */
-    private String htmlOutputter(org.jdom2.Document doc, String xslt, HashMap<String,String> params) throws IOException {
-
-        String result = null;
-
-        try {
-
-            // Init XSLT-Transformer
-            Processor processor = new Processor(false);
-            XsltCompiler xsltCompiler = processor.newXsltCompiler();
-            XsltExecutable xsltExecutable = xsltCompiler.compile(new StreamSource(xslt));
-
-
-            XdmNode source = processor.newDocumentBuilder().build(new JDOMSource( doc ));
-            Serializer out = new Serializer();
-            out.setOutputProperty(Serializer.Property.METHOD, "html");
-            out.setOutputProperty(Serializer.Property.INDENT, "yes");
-
-            StringWriter buffer = new StringWriter();
-            out.setOutputWriter(new PrintWriter( buffer ));
-
-            XsltTransformer trans = xsltExecutable.load();
-            trans.setInitialContextNode(source);
-            trans.setDestination(out);
-
-            if (params != null) {
-                for (String p : params.keySet()) {
-                    trans.setParameter(new QName(p), new XdmAtomicValue(params.get(p).toString()));
-                }
-            }
-
-            trans.transform();
-
-            result = buffer.toString();
-
-        } catch (SaxonApiException e) {
-
-            this.logger.error("SaxonApiException: " + e.getMessage());
-        }
-
-        return result;
     }
 }

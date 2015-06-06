@@ -5,16 +5,10 @@
 # general configuration
 service.id=
 service.name=PaiaService
-service.base_url=http://host[:port]
+service.base_url=http://host[:port] # deprecated
 
 # logging configuration
 service.log4j-conf=/path/to/log4j properties file
-
-# auth configuration
-service.auth.apikeys=/path/to/file
-service.oauth20.tokenendpoint=http://tokenendpoint
-service.oauth20.client_id=
-service.oauth20.client_secret=
 
 # server configuration
 service.port=port

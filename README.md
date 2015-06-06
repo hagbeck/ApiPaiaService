@@ -28,14 +28,13 @@ Die Authentifizierungs- und Autorisierungsfunktionen werden mittels OAuth 2.0 re
 
 ## Anwendung
 
-PaiaService ist in Java 1.7 implementiert und stellt zwei Interfaces für lokale Anpassungen zur Verfügung.
+PaiaService ist in Java 1.7 implementiert und stellt drei Interfaces für lokale Anpassungen zur Verfügung.
 
 * `de.tu_dortmund.ub.api.paia.core.ils.IntegratedLibrarySystem` zur Implementierung der Anbindung an ein ILS
+* `de.tu_dortmund.ub.api.paia.auth.AuthorizationInterface` zur Implementierung der Anbindung an einen OAuth-Token-Endpoint
 * `de.tu_dortmund.ub.util.output.ObjectToHtmlTransformation` zur Implementierung einer HTML-Ausgabe der "Responses" des API - falls benötigt.
 
-Die Konfiguration der Implementierung geschieht mittels `METAINF.service`.
-
-Für die OAuth 2.0-Implementierung der Authentifizierung und Autorisierung wird das Projekt [ApiFest](http://apifest.com/) verwendet.
+Die Konfiguration der Implementierung geschieht mittels `META-INF.service`.
 
 ## Kontakt
 

@@ -4,7 +4,7 @@
 
     <groupId>de.tu_dortmund.ub.api.paia</groupId>
     <artifactId>PaiaService</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>0.9-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>PaiaService</name>
@@ -16,7 +16,7 @@
         <maven.compiler.source>1.7</maven.compiler.source>
         <maven.compiler.target>1.7</maven.compiler.target>
         <!-- Versionen  der Abhängigkeiten -->
-        <dependency.version.jetty>9.2.9.v20150224</dependency.version.jetty>
+        <dependency.version.jetty>9.2.11.v20150529</dependency.version.jetty>
         <dependency.version.log4j>1.2.17</dependency.version.log4j>
         <dependency.version.jaxen>1.1.1</dependency.version.jaxen>
         <dependency.version.jdom2>2.0.6</dependency.version.jdom2>
@@ -25,7 +25,6 @@
         <dependency.version.apache.commons.httpclient>4.4</dependency.version.apache.commons.httpclient>
         <dependency.version.apache.commons.httpcore>4.4</dependency.version.apache.commons.httpcore>
         <dependency.version.apache.commons.httpmime>4.4</dependency.version.apache.commons.httpmime>
-        <dependency.version.oclc.xslnp>4.2</dependency.version.oclc.xslnp>
     </properties>
 
     <dependencies>
@@ -133,20 +132,6 @@
             <groupId>org.glassfish</groupId>
             <artifactId>javax.json</artifactId>
             <version>1.0.4</version>
-        </dependency>
-
-        <!-- 3rd party dependencies -->
-        <dependency>
-            <groupId>org.oclc.xslnp.client</groupId>
-            <artifactId>org.oclc.xslnp.client</artifactId>
-            <version>${dependency.version.oclc.xslnp}</version>
-        </dependency>
-
-        <!-- UB DO dependencies -->
-        <dependency>
-            <groupId>de.tu_dortmund.ub.util</groupId>
-            <artifactId>ManageCryptedApiKeyFile</artifactId>
-            <version>1.0-SNAPSHOT</version>
         </dependency>
 
     </dependencies>

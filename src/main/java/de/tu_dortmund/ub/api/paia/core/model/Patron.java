@@ -60,10 +60,21 @@ public class Patron {
     // additional parameters
     private String gender;
     private String dateofbirth;
+
+    private String country;
     private String city;
     private String postalcode;
-    private String addresssupplement;
     private String street;
+    private String addresssupplement;
+    private String phone;
+
+    private String country2;
+    private String city2;
+    private String postalcode2;
+    private String street2;
+    private String addresssupplement2;
+    private String phone2;
+
     private String usergroup;
     private String externalid;
     private String faculty;
@@ -169,6 +180,15 @@ public class Patron {
     }
 
     @XmlElement
+    public String getCountry() {
+        return country;
+    }
+
+    public void setCountry(String country) {
+        this.country = country;
+    }
+
+    @XmlElement
     public String getCity() {
         return city;
     }
@@ -202,6 +222,69 @@ public class Patron {
 
     public void setStreet(String street) {
         this.street = street;
+    }
+
+    @XmlElement
+    public String getPhone() {
+        return phone;
+    }
+
+    public void setPhone(String phone) {
+        this.phone = phone;
+    }
+
+    @XmlElement
+    public String getCountry2() {
+        return country2;
+    }
+
+    public void setCountry2(String country2) {
+        this.country2 = country2;
+    }
+
+    @XmlElement
+    public String getCity2() {
+        return city2;
+    }
+
+    public void setCity2(String city2) {
+        this.city2 = city2;
+    }
+
+    @XmlElement
+    public String getPostalcode2() {
+        return postalcode2;
+    }
+
+    public void setPostalcode2(String postalcode2) {
+        this.postalcode2 = postalcode2;
+    }
+
+    @XmlElement
+    public String getStreet2() {
+        return street2;
+    }
+
+    public void setStreet2(String street2) {
+        this.street2 = street2;
+    }
+
+    @XmlElement
+    public String getAddresssupplement2() {
+        return addresssupplement2;
+    }
+
+    public void setAddresssupplement2(String addresssupplement2) {
+        this.addresssupplement2 = addresssupplement2;
+    }
+
+    @XmlElement
+    public String getPhone2() {
+        return phone2;
+    }
+
+    public void setPhone2(String phone2) {
+        this.phone2 = phone2;
     }
 
     @XmlElement

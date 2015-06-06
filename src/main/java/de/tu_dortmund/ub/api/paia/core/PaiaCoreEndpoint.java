@@ -25,7 +25,8 @@ SOFTWARE.
 package de.tu_dortmund.ub.api.paia.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import de.tu_dortmund.ub.api.paia.PaiaServiceException;
+import de.tu_dortmund.ub.api.paia.auth.AuthorizationException;
+import de.tu_dortmund.ub.api.paia.auth.AuthorizationInterface;
 import de.tu_dortmund.ub.api.paia.auth.model.LoginResponse;
 import de.tu_dortmund.ub.api.paia.core.ils.ILSException;
 import de.tu_dortmund.ub.api.paia.core.ils.IntegratedLibrarySystem;
@@ -37,19 +38,9 @@ import de.tu_dortmund.ub.api.paia.model.RequestError;
 import de.tu_dortmund.ub.util.impl.Lookup;
 import de.tu_dortmund.ub.util.output.ObjectToHtmlTransformation;
 import de.tu_dortmund.ub.util.output.TransformationException;
-import org.apache.commons.io.IOUtils;
-import org.apache.http.HttpEntity;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 
-import javax.json.Json;
-import javax.json.JsonObject;
-import javax.json.JsonReader;
 import javax.servlet.ServletException;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServlet;
@@ -78,7 +69,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
     private String conffile  = "";
     private Properties config = new Properties();
     private Logger logger = Logger.getLogger(PaiaCoreEndpoint.class.getName());
-    private Properties apikeys;
 
     private String format;
     private String language;
@@ -90,7 +80,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
      */
     public PaiaCoreEndpoint() throws IOException {
 
-        this("conf/paia.properties", null);
+        this("conf/paia.properties");
     }
 
     /**
@@ -98,7 +88,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
      * @param conffile
      * @throws IOException
      */
-    public PaiaCoreEndpoint(String conffile, Properties apikeys) throws IOException {
+    public PaiaCoreEndpoint(String conffile) throws IOException {
 
         this.conffile = conffile;
 
@@ -130,8 +120,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
         this.logger.info("[" + this.config.getProperty("service.name") + "] " + "Starting 'PAIA Core Endpoint' ...");
         this.logger.info("[" + this.config.getProperty("service.name") + "] " + "conf-file = " + conffile);
         this.logger.info("[" + this.config.getProperty("service.name") + "] " + "log4j-conf-file = " + this.config.getProperty("service.log4j-conf"));
-
-        this.apikeys = apikeys;
     }
 
     /**
@@ -255,7 +243,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
             if ((httpServletRequest.getMethod().equals("GET") && (service.equals("patron") || service.equals("fullpatron") || service.equals("items") || service.startsWith("items/ordered") || service.startsWith("items/borrowed") || service.startsWith("items/reserved") || service.equals("fees"))) ||
                     (httpServletRequest.getMethod().equals("POST") && (service.equals("request") || service.equals("renew") || service.equals("cancel")))) {
 
-                // 1. Schritt: Hole 'Accept' und 'Authorization' aus dem Header;
+                // get 'Accept' and 'Authorization' from Header
                 Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
                 while (headerNames.hasMoreElements()) {
 
@@ -286,7 +274,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     this.language = "de";
                 }
 
-                // read rquestBody
+                // read requestBody
                 StringBuffer jb = new StringBuffer();
                 String line = null;
                 try {
@@ -330,111 +318,114 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
 
                 // check token ...
+                boolean isAuthorized = false;
+
+                if (!authorization.equals("")) {
+
+                    if (Lookup.lookupAll(AuthorizationInterface.class).size() > 0) {
+
+                        AuthorizationInterface authorizationInterface = Lookup.lookup(AuthorizationInterface.class);
+                        // init Authorization Service
+                        authorizationInterface.init(this.config);
+
+                        try {
+
+                            isAuthorized = authorizationInterface.isTokenValid(httpServletResponse, service, patronid, authorization);
+                        }
+                        catch (AuthorizationException e) {
+
+                            // TODO correct error handling
+                            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + "!");
+                        }
+                    } else {
+
+                        // TODO correct error handling
+                        this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": " + "Authorization Interface not implemented!");
+                    }
+                }
+
+                this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
+
+                // ... - if not is authorized - against DFN-AAI service
+                if (!isAuthorized) {
+
+                    // TODO if exists OpenAM-Session-Cookie: read content
+                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
+                }
+
+                // read document list
+                DocumentList documentList = null;
+
                 try {
 
-                    boolean isAuthorized = false;
+                    // read DocumentList
+                    documentList = mapper.readValue(requestBody, DocumentList.class);
+                }
+                catch (Exception e) {
 
-                    if (!authorization.equals("")) {
-                        // ... against local OAuth 2.0 service
-                        isAuthorized = this.checkToken(httpServletResponse, service, authorization);
-                    }
-                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
+                    if (!requestBody.equals("")) {
 
-                    // ... - if not is authorized - against DFN-AAI service
-                    if (!isAuthorized) {
+                        String[] params = requestBody.split("&");
 
-                        // TODO if exists OpenAM-Session-Cookie: read content
-                        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
-                    }
-
-                    // read document list
-                    DocumentList documentList = null;
-
-                    try {
-
-                        // read DocumentList
-                        documentList = mapper.readValue(requestBody, DocumentList.class);
-                    } catch (Exception e) {
-
-                        if (!requestBody.equals("")) {
-
-                            String[] params = requestBody.split("&");
-
-                            if (params.length > 1) {
-
-                                documentList = new DocumentList();
-                                documentList.setDoc(new ArrayList<Document>());
-
-                                for (String param : params) {
-
-                                    if (param.startsWith("document_id")) {
-                                        Document document = new Document();
-                                        document.setEdition(param.split("=")[1]);
-                                        documentList.getDoc().add(document);
-                                    }
-                                }
-                            }
-                        } else if (httpServletRequest.getParameter("document_id") != null && !httpServletRequest.getParameter("document_id").equals("")) {
-
-                            Document document = new Document();
-                            document.setEdition(httpServletRequest.getParameter("document_id"));
+                        if (params.length > 1) {
 
                             documentList = new DocumentList();
                             documentList.setDoc(new ArrayList<Document>());
-                            documentList.getDoc().add(document);
-                        } else {
 
-                            // if exists cookie with name "PaiaServiceDocumentList": read it
-                            Cookie[] cookies = httpServletRequest.getCookies();
+                            for (String param : params) {
 
-                            if (cookies != null) {
-                                for (Cookie cookie : cookies) {
-                                    if (cookie.getName().equals("PaiaServiceDocumentList")) {
-
-                                        if (cookie.getValue() != null && !cookie.getValue().equals("") && !cookie.getValue().equals("null")) {
-
-                                            String value = URLDecoder.decode(cookie.getValue(), "UTF-8");
-                                            this.logger.info(value);
-                                            documentList = mapper.readValue(value, DocumentList.class);
-                                        }
-
-                                        break;
-                                    }
+                                if (param.startsWith("document_id")) {
+                                    Document document = new Document();
+                                    document.setEdition(param.split("=")[1]);
+                                    documentList.getDoc().add(document);
                                 }
                             }
                         }
                     }
+                    else if (httpServletRequest.getParameter("document_id") != null && !httpServletRequest.getParameter("document_id").equals("")) {
 
-                    if (isAuthorized) {
+                        Document document = new Document();
+                        document.setEdition(httpServletRequest.getParameter("document_id"));
 
-                        // execute query
-                        this.paiaCore(httpServletRequest, httpServletResponse, patronid, service, documentList);
-                    } else {
-
-                        // Authorization
-                        this.authorize(httpServletRequest, httpServletResponse, service, patronid, documentList);
+                        documentList = new DocumentList();
+                        documentList.setDoc(new ArrayList<Document>());
+                        documentList.getDoc().add(document);
                     }
-
-                } catch (PaiaServiceException e) {
-
-                    // Error handling mit suppress_response_codes=true
-                    if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                    }
-                    // Error handling mit suppress_response_codes=false (=default)
                     else {
-                        httpServletResponse.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+
+                        // if exists cookie with name "PaiaServiceDocumentList": read it
+                        Cookie[] cookies = httpServletRequest.getCookies();
+
+                        if (cookies != null) {
+                            for (Cookie cookie : cookies) {
+                                if (cookie.getName().equals("PaiaServiceDocumentList")) {
+
+                                    if (cookie.getValue() != null && !cookie.getValue().equals("") && !cookie.getValue().equals("null")) {
+
+                                        String value = URLDecoder.decode(cookie.getValue(), "UTF-8");
+                                        this.logger.info(value);
+                                        documentList = mapper.readValue(value, DocumentList.class);
+                                    }
+
+                                    break;
+                                }
+                            }
+                        }
                     }
-
-                    RequestError requestError = new RequestError();
-                    requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE)));
-                    requestError.setCode(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
-                    requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
-                    requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
-
-                    this.sendRequestError(httpServletResponse, requestError);
                 }
-            } else {
+
+                if (isAuthorized) {
+
+                    // execute query
+                    this.provideService(httpServletRequest, httpServletResponse, patronid, service, documentList);
+                }
+                else {
+
+                    // Authorization
+                    this.authorize(httpServletRequest, httpServletResponse, documentList);
+                }
+            }
+            else {
 
                 this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_METHOD_NOT_ALLOWED + ": " + httpServletRequest.getMethod() + " for '" + service + "' not allowed!");
 
@@ -470,193 +461,11 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
     /**
      *
-     * @param httpServletResponse
-     * @param service
-     * @param access_token
-     * @return
-     * @throws IOException
-     */
-    private boolean checkToken(HttpServletResponse httpServletResponse, String service, String access_token) throws PaiaServiceException {
-
-        boolean isAuthorized = false;
-
-        String scope = "";
-
-        switch (service) {
-
-            case "patron" : {
-
-                scope = "read_patron";
-                break;
-            }
-            case "fullpatron" : {
-
-                scope = "write_patron";
-                break;
-            }
-            case "items" : {
-
-                scope = "read_items";
-                break;
-            }
-            case "items/ordered" : {
-
-                scope = "read_items";
-                break;
-            }
-            case "items/reserved" : {
-
-                scope = "read_items";
-                break;
-            }
-            case "items/borrowed" : {
-
-                scope = "read_items";
-                break;
-            }
-            case "request" : {
-
-                scope = "write_items";
-                break;
-            }
-            case "renew" : {
-
-                scope = "write_items";
-                break;
-            }
-            case "cancel" : {
-
-                scope = "write_items";
-                break;
-            }
-            case "fees" : {
-
-                scope = "read_fees";
-                break;
-            }
-        }
-
-        CloseableHttpClient httpclient = HttpClients.createDefault();
-
-        try {
-
-            if (this.config.getProperty("service.oauth20.tokenendpoint") != null && !this.config.getProperty("service.oauth20.tokenendpoint").equals("")) {
-
-                String url = this.config.getProperty("service.oauth20.tokenendpoint") + "/validate?token=" + access_token;
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + "TOKEN-ENDPOINT-URL: " + url);
-                HttpGet httpGet = new HttpGet(url);
-
-                CloseableHttpResponse httpResponse = httpclient.execute(httpGet);
-
-                try {
-
-                    int statusCode = httpResponse.getStatusLine().getStatusCode();
-                    HttpEntity httpEntity = httpResponse.getEntity();
-
-                    switch (statusCode) {
-
-                        case HttpServletResponse.SC_OK: {
-
-                            // {"valid":true,"scope":[scope],"created":[time_created],"token":[access_token],"expiresIn":[expiration],"userId":"","refreshToken":"","type":"Bearer","clientId":[client_id]}
-                            StringWriter writer = new StringWriter();
-                            IOUtils.copy(httpEntity.getContent(), writer, "UTF-8");
-                            String responseJson = writer.toString();
-
-                            logger.info("[" + config.getProperty("service.name") + "] responseJson : " + responseJson);
-
-                            // prüfe 'valid' und 'scopes'
-                            JsonReader jsonReader = Json.createReader(IOUtils.toInputStream(responseJson, "UTF-8"));
-                            JsonObject jsonObject = jsonReader.readObject();
-
-                            boolean valid = jsonObject.getBoolean("valid");
-                            String scopes = jsonObject.getString("scope");
-
-                            // valid token?
-                            if (valid && scopes.contains(scope)) {
-
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + "PaiaService." + service + " kann ausgeführt werden!");
-
-                                isAuthorized = true;
-                                httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                            }
-                            else {
-
-                                // valid api_key?
-                                if (apikeys != null && apikeys.containsKey(access_token) && apikeys.getProperty(access_token).contains(scope)) {
-
-                                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "PaiaService." + service + " kann ausgeführt werden!");
-
-                                    isAuthorized = true;
-                                    httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                                }
-                                else {
-
-                                    isAuthorized = false;
-                                }
-                            }
-
-                            break;
-                        }
-                        case HttpServletResponse.SC_UNAUTHORIZED: {
-
-                            // valid api_key?
-                            if (apikeys != null && apikeys.containsKey(access_token) && apikeys.getProperty(access_token).contains(scope)) {
-
-                                this.logger.debug("[" + config.getProperty("service.name") + "] " + "PaiaService." + service + " kann ausgeführt werden!");
-
-                                isAuthorized = true;
-                                httpServletResponse.setHeader("X-OAuth-Scopes", scope);
-                            }
-                            else {
-
-                                isAuthorized = false;
-                            }
-
-                            break;
-                        }
-                        default: {
-
-                            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_SERVICE_UNAVAILABLE + " - Unable to validate the given token!");
-
-                            throw new PaiaServiceException(HttpServletResponse.SC_SERVICE_UNAVAILABLE + " - Unable to validate the given token!");
-                        }
-                    }
-
-                    EntityUtils.consume(httpEntity);
-                } finally {
-                    httpResponse.close();
-                }
-            }
-        }
-        catch (IOException e) {
-
-            throw new PaiaServiceException(HttpServletResponse.SC_SERVICE_UNAVAILABLE + " - Unable to validate the given token!");
-        }
-        finally {
-
-            try {
-
-                httpclient.close();
-
-            }
-            catch (IOException e) {
-
-                throw new PaiaServiceException(HttpServletResponse.SC_SERVICE_UNAVAILABLE + " - Unable to validate the given token!");
-            }
-        }
-
-        return isAuthorized;
-    }
-
-    /**
-     *
      * @param httpServletRequest
      * @param httpServletResponse
-     * @param service
-     * @param patronid
      * @throws IOException
      */
-    private void authorize(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String service, String patronid, DocumentList documents) throws IOException {
+    private void authorize(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, DocumentList documents) throws IOException {
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -725,7 +534,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
     /**
      * PAIA core services: Prüfe jeweils die scopes und liefere die Daten
      */
-    private void paiaCore(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, DocumentList documents) throws IOException {
+    private void provideService(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, DocumentList documents) throws IOException {
 
         ObjectMapper mapper = new ObjectMapper();
 

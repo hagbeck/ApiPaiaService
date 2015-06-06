@@ -18,6 +18,7 @@
         <!-- Versionen  der Abhängigkeiten -->
         <dependency.version.jetty>9.2.11.v20150529</dependency.version.jetty>
         <dependency.version.log4j>1.2.17</dependency.version.log4j>
+        <dependency.version.mail>1.4</dependency.version.mail>
         <dependency.version.jaxen>1.1.1</dependency.version.jaxen>
         <dependency.version.jdom2>2.0.6</dependency.version.jdom2>
         <dependency.version.jackson>2.5.0</dependency.version.jackson>
@@ -54,6 +55,13 @@
             <groupId>log4j</groupId>
             <artifactId>log4j</artifactId>
             <version>${dependency.version.log4j}</version>
+        </dependency>
+
+        <!-- Mail -->
+        <dependency>
+            <groupId>javax.mail</groupId>
+            <artifactId>mail</artifactId>
+            <version>${dependency.version.mail}</version>
         </dependency>
 
         <!-- XML tools -->

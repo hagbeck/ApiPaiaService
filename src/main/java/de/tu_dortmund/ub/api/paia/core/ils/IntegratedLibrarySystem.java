@@ -32,7 +32,7 @@ import java.util.Properties;
 
 /**
  * @author Hans-Georg Becker
- * @version 0.9.1 (2015-02-19)
+ * @version 0.9 (2015-06-07)
  */
 public interface IntegratedLibrarySystem {
 
@@ -44,7 +44,11 @@ public interface IntegratedLibrarySystem {
 
     Patron patron(String patronid, boolean extended) throws ILSException;
 
+    DocumentList items(String patronid) throws ILSException;
+
     DocumentList items(String patronid, String type) throws ILSException;
+
+    DocumentList items(String patronid, String type, String selection) throws ILSException;
 
     FeeList fees(String patronid) throws ILSException;
 

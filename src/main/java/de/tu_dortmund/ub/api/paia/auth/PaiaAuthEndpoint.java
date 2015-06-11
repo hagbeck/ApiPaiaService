@@ -264,10 +264,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                             this.logger.info(value);
                             LoginResponse loginResponse = mapper.readValue(value, LoginResponse.class);
 
-                            // A C H T U N G: ggf. andere patronID im Cookie als in Request (UniAccount vs. BibAccount)
-                            if (loginResponse.getPatron().equals(patronid)) {
-                                access_token = loginResponse.getAccess_token();
-                            }
+                            access_token = loginResponse.getAccess_token();
 
                             break;
                         }
@@ -385,6 +382,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                     // delete cookie
                     Cookie cookie = new Cookie("PaiaService", null);
                     cookie.setMaxAge(0);
+                    cookie.setPath("/");
                     httpServletResponse.addCookie(cookie);
 
                     access_token = "";
@@ -499,10 +497,12 @@ public class PaiaAuthEndpoint extends HttpServlet {
                             }
 
                             EntityUtils.consume(httpEntity);
-                        } finally {
+                        }
+                        finally {
                             httpResponse.close();
                         }
-                    } finally {
+                    }
+                    finally {
                         httpclient.close();
                     }
 
@@ -523,6 +523,20 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         cookie.setMaxAge(-1);
                         cookie.setPath("/");
                         httpServletResponse.addCookie(cookie);
+
+                        // extent redirect_url
+                        if (redirect_url.startsWith(this.config.getProperty("service.base_url") + "/core")) {
+
+                            if (redirect_url.endsWith("core/")) {
+                                redirect_url += loginResponse.getPatron();
+                            }
+                            else if (redirect_url.endsWith("core")) {
+                                redirect_url += "/" + loginResponse.getPatron();
+                            }
+                            else {
+                                // nix
+                            }
+                        }
 
                         // XML-Ausgabe mit JAXB
                         if (format.equals("xml")) {
@@ -670,39 +684,42 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                 CloseableHttpClient httpclient = HttpClients.createDefault();
 
-                String tokenRequestBody = "{ \"access_token\"=\"" + access_token + "\","
-                        + "\"client_id\"=\"" + this.config.getProperty("service.oauth20.client_id") + "\","
-                        + "\"client_secret\"=\"" + this.config.getProperty("service.oauth20.client_secret") + "\""
-                        + "}";
+                if (!access_token.equals("")) {
+                    String tokenRequestBody = "{ \"access_token\"=\"" + access_token + "\","
+                            + "\"client_id\"=\"" + this.config.getProperty("service.oauth20.client_id") + "\","
+                            + "\"client_secret\"=\"" + this.config.getProperty("service.oauth20.client_secret") + "\""
+                            + "}";
 
-                HttpPost httpPost = new HttpPost(this.config.getProperty("service.oauth20.tokenendpoint") + "/revoke");
-                StringEntity stringEntity = new StringEntity(tokenRequestBody, ContentType.create("application/json", Consts.UTF_8));
-                httpPost.setEntity(stringEntity);
+                    HttpPost httpPost = new HttpPost(this.config.getProperty("service.oauth20.tokenendpoint") + "/revoke");
+                    StringEntity stringEntity = new StringEntity(tokenRequestBody, ContentType.create("application/json", Consts.UTF_8));
+                    httpPost.setEntity(stringEntity);
 
-                CloseableHttpResponse httpResponse = httpclient.execute(httpPost);
+                    CloseableHttpResponse httpResponse = httpclient.execute(httpPost);
 
-                try {
+                    try {
 
-                    int statusCode = httpResponse.getStatusLine().getStatusCode();
-                    HttpEntity httpEntity = httpResponse.getEntity();
+                        int statusCode = httpResponse.getStatusLine().getStatusCode();
+                        HttpEntity httpEntity = httpResponse.getEntity();
 
-                    switch (statusCode) {
+                        switch (statusCode) {
 
-                        case 200: {
+                            case 200: {
 
-                            this.logger.info("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode);
+                                this.logger.info("[" + this.config.getProperty("service.name") + "] " + "SUCCESS logout(): HTTP STATUS = " + statusCode);
 
-                            break;
+                                break;
+                            }
+                            default: {
+
+                                this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode);
+                            }
                         }
-                        default: {
 
-                            this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode);
-                        }
+                        EntityUtils.consume(httpEntity);
                     }
-
-                    EntityUtils.consume(httpEntity);
-                } finally {
-                    httpResponse.close();
+                    finally {
+                        httpResponse.close();
+                    }
                 }
 
                 httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
@@ -711,18 +728,22 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 // delete cookie
                 Cookie cookie = new Cookie("PaiaService", null);
                 cookie.setMaxAge(0);
+                cookie.setPath("/");
                 httpServletResponse.addCookie(cookie);
 
                 // html >> redirect
                 if (format.equals("html")) {
 
                     if (httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
-                        httpServletResponse.sendRedirect(httpServletRequest.getParameter("redirect_url"));
+
+                        redirect_url = httpServletRequest.getParameter("redirect_url");
                     }
                     else {
 
-                        format = "json";
+                        redirect_url = this.config.getProperty("service.auth.logout.redirect.default");
                     }
+
+                    httpServletResponse.sendRedirect(redirect_url);
                 }
 
                 if (format.equals("json")) {

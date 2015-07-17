@@ -168,7 +168,7 @@
     <distributionManagement>
         <repository>
             <id>nexus</id>
-            <url>http://129.217.132.134:9080/nexus/content/repositories/snapshots</url>
+            <url>https://dev.ub.tu-dortmund.de/nexus/content/repositories/snapshots</url>
         </repository>
     </distributionManagement>
 

@@ -228,7 +228,14 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
             if (httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
 
-                this.redirect_url = httpServletRequest.getParameter("redirect_url");
+                if (httpServletRequest.getParameter("redirect_url").contains("redirect_url=")) {
+                    String tmp[] = httpServletRequest.getParameter("redirect_url").split("redirect_url=");
+
+                    this.redirect_url = tmp[0] + "redirect_url=" + URLEncoder.encode(tmp[1], "UTF-8");
+                }
+                else {
+                    this.redirect_url = httpServletRequest.getParameter("redirect_url");
+                }
             }
 
             this.logger.info("redirect_url = " + this.redirect_url);
@@ -525,6 +532,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         httpServletResponse.addCookie(cookie);
 
                         // extent redirect_url
+                        this.logger.info("redirect_url: " + redirect_url);
                         if (redirect_url.startsWith(this.config.getProperty("service.base_url") + "/core")) {
 
                             if (redirect_url.endsWith("core/")) {
@@ -532,6 +540,10 @@ public class PaiaAuthEndpoint extends HttpServlet {
                             }
                             else if (redirect_url.endsWith("core")) {
                                 redirect_url += "/" + loginResponse.getPatron();
+                            }
+                            else if (redirect_url.contains("/patronid/")) {
+
+                                redirect_url = redirect_url.replaceAll("/patronid/", "/" + loginResponse.getPatron() + "/");
                             }
                             else {
                                 // nix
@@ -632,7 +644,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                                 HashMap<String, String> parameters = new HashMap<String, String>();
                                 parameters.put("lang", this.language);
-                                parameters.put("redirect_uri_params", URLDecoder.decode(httpServletRequest.getQueryString(), "UTF-8"));
+                                parameters.put("redirect_url", this.redirect_url);
 
                                 String provider = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.auth") + "/" + service;
                                 parameters.put("formURL", provider);

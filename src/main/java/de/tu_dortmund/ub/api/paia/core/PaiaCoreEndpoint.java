@@ -176,6 +176,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 }
             }
         }
+
+        if (patronid.equals("patronid")) {
+
+            patronid = "";
+        }
+
         this.logger.debug("[" + config.getProperty("service.name") + "] " + "Service: " + service);
         this.logger.debug("[" + config.getProperty("service.name") + "] " + "Patron: " + patronid);
 
@@ -328,7 +334,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 if ((httpServletRequest.getMethod().equals("GET") && (service.equals("patron") || service.equals("fullpatron") ||
                         service.equals("items") || service.startsWith("items/ordered") || service.startsWith("items/reserved") ||
                         service.startsWith("items/borrowed") || service.startsWith("items/borrowed/ill") || service.startsWith("items/borrowed/renewed") || service.startsWith("items/borrowed/recalled") ||
-                        service.equals("fees"))) ||
+                        service.equals("fees") || service.equals("request"))) ||
                         (httpServletRequest.getMethod().equals("POST") && (service.equals("request") || service.equals("renew") || service.equals("cancel")))) {
 
                     // get 'Accept' and 'Authorization' from Header
@@ -531,6 +537,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
         // html > redirect zu "PAIA auth - login" mit redirect_url = "PAIA core - service"
         if (this.format.equals("html")) {
 
+            httpServletResponse.setContentType("text/html;charset=UTF-8");
+
             if (documents != null) {
                 // set Cookie with urlencoded DocumentList-JSON
                 StringWriter stringWriter = new StringWriter();
@@ -542,7 +550,13 @@ public class PaiaCoreEndpoint extends HttpServlet {
             }
 
             String redirect_url = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.core") + httpServletRequest.getPathInfo();
+            if (httpServletRequest.getQueryString() != null && !httpServletRequest.getQueryString().equals("")) {
+                redirect_url += "?" + httpServletRequest.getQueryString();
+            }
+            this.logger.info("redirect_url = " + redirect_url);
+
             String login_url = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.auth") + "/login?redirect_url=" + redirect_url;
+            this.logger.info("login_url = " + login_url);
 
             httpServletResponse.sendRedirect(login_url);
         }
@@ -1377,9 +1391,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             mapper.writeValue(json, documentList);
                             this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
 
-                            // delete DocumentList cookie
-                            Cookie cookie = new Cookie("PaiaServiceDocumentList", null);
-                            cookie.setMaxAge(0);
+                            // set Cookie with new value for urlencoded DocumentList-JSON
+                            StringWriter stringWriter = new StringWriter();
+                            mapper.writeValue(stringWriter, documents);
+                            Cookie cookie = new Cookie("PaiaServiceDocumentList", URLEncoder.encode(stringWriter.toString(), "UTF-8"));
+                            cookie.setMaxAge(-1);
+                            cookie.setPath("/");
                             httpServletResponse.addCookie(cookie);
 
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
@@ -1389,24 +1406,30 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
-                                    try {
-                                        ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
-                                        // init transformator
-                                        htmlTransformation.init(this.config);
+                                    this.logger.info("redirect_url = " + this.redirect_url);
+                                    if (!this.redirect_url.equals("")) {
 
-                                        HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
-                                        parameters.put("service", service);
+                                        httpServletResponse.sendRedirect(redirect_url);
+                                    } else {
 
-                                        httpServletResponse.setContentType("text/html;charset=UTF-8");
-                                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                        httpServletResponse.getWriter().println(htmlTransformation.transform(documentList, parameters));
-                                    }
-                                    catch (TransformationException e) {
-                                        httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                        try {
+                                            ObjectToHtmlTransformation htmlTransformation = Lookup.lookup(ObjectToHtmlTransformation.class);
+                                            // init transformator
+                                            htmlTransformation.init(this.config);
+
+                                            HashMap<String, String> parameters = new HashMap<String, String>();
+                                            parameters.put("lang", this.language);
+                                            parameters.put("service", service);
+
+                                            httpServletResponse.setContentType("text/html;charset=UTF-8");
+                                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                            httpServletResponse.getWriter().println(htmlTransformation.transform(documentList, parameters));
+                                        } catch (TransformationException e) {
+                                            httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering a HTML message.");
+                                        }
                                     }
                                 }
-                                else {
+                                else{
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
                                     this.format = "json";
                                 }

@@ -13,19 +13,21 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <!-- Version des Java Compilers -->
-        <maven.compiler.source>1.7</maven.compiler.source>
-        <maven.compiler.target>1.7</maven.compiler.target>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
         <!-- Versionen  der Abhängigkeiten -->
-        <dependency.version.jetty>9.2.11.v20150529</dependency.version.jetty>
+        <dependency.version.junit>4.12</dependency.version.junit>
+        <dependency.version.maven.shade>2.4.1</dependency.version.maven.shade>
+        <dependency.version.jetty>9.3.1.v20150714</dependency.version.jetty>
         <dependency.version.log4j>1.2.17</dependency.version.log4j>
-        <dependency.version.mail>1.4</dependency.version.mail>
-        <dependency.version.jaxen>1.1.1</dependency.version.jaxen>
+        <dependency.version.javax.mail>1.5.4</dependency.version.javax.mail>
+        <dependency.version.jaxen>1.1.6</dependency.version.jaxen>
         <dependency.version.jdom2>2.0.6</dependency.version.jdom2>
         <dependency.version.jackson>2.5.0</dependency.version.jackson>
         <dependency.version.apache.commons.io>2.4</dependency.version.apache.commons.io>
-        <dependency.version.apache.commons.httpclient>4.4</dependency.version.apache.commons.httpclient>
-        <dependency.version.apache.commons.httpcore>4.4</dependency.version.apache.commons.httpcore>
-        <dependency.version.apache.commons.httpmime>4.4</dependency.version.apache.commons.httpmime>
+        <dependency.version.apache.commons.httpclient>4.5</dependency.version.apache.commons.httpclient>
+        <dependency.version.apache.commons.httpcore>4.4.1</dependency.version.apache.commons.httpcore>
+        <dependency.version.apache.commons.httpmime>4.5</dependency.version.apache.commons.httpmime>
     </properties>
 
     <dependencies>
@@ -33,7 +35,7 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>3.8.1</version>
+            <version>${dependency.version.junit}</version>
             <scope>test</scope>
         </dependency>
 
@@ -46,7 +48,7 @@
         <dependency>
             <groupId>org.apache.maven.plugins</groupId>
             <artifactId>maven-shade-plugin</artifactId>
-            <version>2.3</version>
+            <version>${dependency.version.maven.shade}</version>
             <type>maven-plugin</type>
         </dependency>
 
@@ -59,9 +61,9 @@
 
         <!-- Mail -->
         <dependency>
-            <groupId>javax.mail</groupId>
-            <artifactId>mail</artifactId>
-            <version>${dependency.version.mail}</version>
+            <groupId>com.sun.mail</groupId>
+            <artifactId>javax.mail</artifactId>
+            <version>${dependency.version.javax.mail}</version>
         </dependency>
 
         <!-- XML tools -->
@@ -168,7 +170,7 @@
     <distributionManagement>
         <repository>
             <id>nexus</id>
-            <url>https://dev.ub.tu-dortmund.de/nexus/content/repositories/snapshots</url>
+            <url>http://129.217.132.134:9080/nexus/content/repositories/snapshots</url>
         </repository>
     </distributionManagement>
 

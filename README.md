@@ -28,7 +28,7 @@ Die Authentifizierungs- und Autorisierungsfunktionen werden mittels OAuth 2.0 re
 
 ## Anwendung
 
-PaiaService ist in Java 1.7 implementiert und stellt drei Interfaces für lokale Anpassungen zur Verfügung.
+PaiaService ist in Java 1.8 implementiert und stellt drei Interfaces für lokale Anpassungen zur Verfügung.
 
 * `de.tu_dortmund.ub.api.paia.core.ils.IntegratedLibrarySystem` zur Implementierung der Anbindung an ein ILS
 * `de.tu_dortmund.ub.api.paia.auth.AuthorizationInterface` zur Implementierung der Anbindung an einen OAuth-Token-Endpoint
@@ -40,7 +40,7 @@ Die Konfiguration der Implementierung geschieht mittels `META-INF.service`.
 
 **api@ubdo - Application Programming Interfaces der Universitätsbibliothek Dortmund**
 
-Technische Universität Dortmund // Universitätsbibliothek // Vogelpothsweg 76 // 44227 Dortmund
+Technische Universität Dortmund // Universitätsbibliothek // Bibliotheks-IT // Vogelpothsweg 76 // 44227 Dortmund
 
 [Webseite](https://api.ub.tu-dortmund.de) // [E-Mail](mailto:api@ub.tu-dortmund.de)
 

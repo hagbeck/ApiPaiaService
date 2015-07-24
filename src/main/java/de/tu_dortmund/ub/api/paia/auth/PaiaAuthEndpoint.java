@@ -388,6 +388,9 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                     // delete cookie
                     Cookie cookie = new Cookie("PaiaService", null);
+                    if (this.config.getProperty("service.cookie.domain") != null && !this.config.getProperty("service.cookie.domain").equals("")) {
+                        cookie.setDomain(this.config.getProperty("service.cookie.domain"));
+                    }
                     cookie.setMaxAge(0);
                     cookie.setPath("/");
                     httpServletResponse.addCookie(cookie);
@@ -527,6 +530,9 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         StringWriter stringWriter = new StringWriter();
                         mapper.writeValue(stringWriter, loginResponse);
                         Cookie cookie = new Cookie("PaiaService", URLEncoder.encode(stringWriter.toString(), "UTF-8"));
+                        if (this.config.getProperty("service.cookie.domain") != null && !this.config.getProperty("service.cookie.domain").equals("")) {
+                            cookie.setDomain(this.config.getProperty("service.cookie.domain"));
+                        }
                         cookie.setMaxAge(-1);
                         cookie.setPath("/");
                         httpServletResponse.addCookie(cookie);
@@ -549,6 +555,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                                 // nix
                             }
                         }
+                        this.logger.info("redirect_url: " + redirect_url);
 
                         // XML-Ausgabe mit JAXB
                         if (format.equals("xml")) {
@@ -581,7 +588,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                             // if QueryString contains redirect_url and value of it contains /paia/core/ >> expand URL with username
                             if (redirect_url.contains("/paia/core/")) {
 
-                                redirect_url += loginResponse.getPatron();
+                                // TODO redirect_url += loginResponse.getPatron();
                             }
                             this.logger.info("redirect_url = " + redirect_url);
 
@@ -739,6 +746,9 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                 // delete cookie
                 Cookie cookie = new Cookie("PaiaService", null);
+                if (this.config.getProperty("service.cookie.domain") != null && !this.config.getProperty("service.cookie.domain").equals("")) {
+                    cookie.setDomain(this.config.getProperty("service.cookie.domain"));
+                }
                 cookie.setMaxAge(0);
                 cookie.setPath("/");
                 httpServletResponse.addCookie(cookie);

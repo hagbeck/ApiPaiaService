@@ -544,18 +544,23 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 StringWriter stringWriter = new StringWriter();
                 mapper.writeValue(stringWriter, documents);
                 Cookie cookie = new Cookie("PaiaServiceDocumentList", URLEncoder.encode(stringWriter.toString(), "UTF-8"));
+                if (this.config.getProperty("service.cookie.domain") != null && !this.config.getProperty("service.cookie.domain").equals("")) {
+                    cookie.setDomain(this.config.getProperty("service.cookie.domain"));
+                }
                 cookie.setMaxAge(-1);
                 cookie.setPath("/");
                 httpServletResponse.addCookie(cookie);
             }
 
-            String redirect_url = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.core") + httpServletRequest.getPathInfo();
+            //String redirect_url = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.core") + httpServletRequest.getPathInfo();
+            String redirect_url = this.config.getProperty("service.base_url") + this.config.getProperty("service.endpoint.core") + httpServletRequest.getPathInfo();
             if (httpServletRequest.getQueryString() != null && !httpServletRequest.getQueryString().equals("")) {
                 redirect_url += "?" + httpServletRequest.getQueryString();
             }
             this.logger.info("redirect_url = " + redirect_url);
 
-            String login_url = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.auth") + "/login?redirect_url=" + redirect_url;
+            //String login_url = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.auth") + "/login?redirect_url=" + redirect_url;
+            String login_url = this.config.getProperty("service.base_url") + this.config.getProperty("service.endpoint.auth") + "/login?redirect_url=" + redirect_url;
             this.logger.info("login_url = " + login_url);
 
             httpServletResponse.sendRedirect(login_url);
@@ -1395,6 +1400,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             StringWriter stringWriter = new StringWriter();
                             mapper.writeValue(stringWriter, documents);
                             Cookie cookie = new Cookie("PaiaServiceDocumentList", URLEncoder.encode(stringWriter.toString(), "UTF-8"));
+                            if (this.config.getProperty("service.cookie.domain") != null && !this.config.getProperty("service.cookie.domain").equals("")) {
+                                cookie.setDomain(this.config.getProperty("service.cookie.domain"));
+                            }
                             cookie.setMaxAge(-1);
                             cookie.setPath("/");
                             httpServletResponse.addCookie(cookie);
@@ -1496,6 +1504,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                             // delete DocumentList cookie
                             Cookie cookie = new Cookie("PaiaServiceDocumentList", null);
+                            if (this.config.getProperty("service.cookie.domain") != null && !this.config.getProperty("service.cookie.domain").equals("")) {
+                                cookie.setDomain(this.config.getProperty("service.cookie.domain"));
+                            }
                             cookie.setMaxAge(0);
                             httpServletResponse.addCookie(cookie);
 
@@ -1590,6 +1601,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                             // delete DocumentList cookie
                             Cookie cookie = new Cookie("PaiaServiceDocumentList", null);
+                            if (this.config.getProperty("service.cookie.domain") != null && !this.config.getProperty("service.cookie.domain").equals("")) {
+                                cookie.setDomain(this.config.getProperty("service.cookie.domain"));
+                            }
                             cookie.setMaxAge(0);
                             httpServletResponse.addCookie(cookie);
 

@@ -653,7 +653,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
                                 parameters.put("lang", this.language);
                                 parameters.put("redirect_url", this.redirect_url);
 
-                                String provider = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.auth") + "/" + service;
+                                //String provider = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.auth") + "/" + service;
+                                String provider = this.config.getProperty("service.base_url") + this.config.getProperty("service.endpoint.auth") + "/" + service;
                                 parameters.put("formURL", provider);
 
                                 httpServletResponse.setContentType("text/html;charset=UTF-8");

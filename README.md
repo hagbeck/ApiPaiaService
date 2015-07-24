@@ -6,7 +6,7 @@
 
 ---
 
-# PaiaService - Eine Implmentierung der PAIA-Spezifikation
+# PaiaService - Eine Implementierung der PAIA-Spezifikation
 
 Die UB Dortmund benötigt einen nach aussen vom Bibliothekssystem (ILS) unabhängigen Service für Kontofunktionen aus Nutzersicht. Zu diesen zählen:
 

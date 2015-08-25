@@ -73,10 +73,6 @@ public class PaiaAuthEndpoint extends HttpServlet {
     private Properties config = new Properties();
     private Logger logger = Logger.getLogger(PaiaAuthEndpoint.class.getName());
 
-    private String format;
-    private String language;
-    private String redirect_url;
-
     /**
      *
      * @throws java.io.IOException
@@ -134,6 +130,10 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
         ObjectMapper mapper = new ObjectMapper();
 
+        String format;
+        String language;
+        String redirect_url;
+
         this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "PathInfo = " + httpServletRequest.getPathInfo());
         this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "QueryString = " + httpServletRequest.getQueryString());
 
@@ -150,8 +150,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
             service = params[0];
         }
 
-        this.format = "html";
-        this.language = "";
+        format = "html";
+        language = "";
 
         // Hole 'Accept' und 'Authorization' aus dem Header;
         Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
@@ -165,18 +165,18 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 this.logger.debug("headerNameKey = " + httpServletRequest.getHeader( headerNameKey ));
 
                 if (httpServletRequest.getHeader( headerNameKey ).contains("text/html")) {
-                    this.format = "html";
+                    format = "html";
                 }
                 else if (httpServletRequest.getHeader( headerNameKey ).contains("application/xml")) {
-                    this.format = "xml";
+                    format = "xml";
                 }
                 else if (httpServletRequest.getHeader( headerNameKey ).contains("application/json")) {
-                    this.format = "json";
+                    format = "json";
                 }
             }
             if (headerNameKey.equals("Accept-Language")) {
-                this.language = httpServletRequest.getHeader( headerNameKey );
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept-Language: " + this.language);
+                language = httpServletRequest.getHeader( headerNameKey );
+                this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept-Language: " + language);
             }
             if (headerNameKey.equals("Authorization")) {
                 authorization = httpServletRequest.getHeader( headerNameKey );
@@ -194,12 +194,12 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
         if (httpServletRequest.getParameter("format") != null && !httpServletRequest.getParameter("format").equals("")) {
 
-            this.format = httpServletRequest.getParameter("format");
+            format = httpServletRequest.getParameter("format");
         }
 
-        this.logger.info("format = " + this.format);
+        this.logger.info("format = " + format);
 
-        if (this.format.equals("html") && Lookup.lookupAll(ObjectToHtmlTransformation.class).size() == 0) {
+        if (format.equals("html") && Lookup.lookupAll(ObjectToHtmlTransformation.class).size() == 0) {
 
             this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_BAD_REQUEST + ": " + "html not implemented!");
 
@@ -219,39 +219,39 @@ public class PaiaAuthEndpoint extends HttpServlet {
             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".description"));
             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".uri"));
 
-            this.sendRequestError(httpServletResponse, requestError);
+            this.sendRequestError(httpServletResponse, requestError, format, language, "");
         }
         else {
 
             // redirect_url
-            this.redirect_url = "";
+            redirect_url = "";
 
             if (httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
 
                 if (httpServletRequest.getParameter("redirect_url").contains("redirect_url=")) {
                     String tmp[] = httpServletRequest.getParameter("redirect_url").split("redirect_url=");
 
-                    this.redirect_url = tmp[0] + "redirect_url=" + URLEncoder.encode(tmp[1], "UTF-8");
+                    redirect_url = tmp[0] + "redirect_url=" + URLEncoder.encode(tmp[1], "UTF-8");
                 }
                 else {
-                    this.redirect_url = httpServletRequest.getParameter("redirect_url");
+                    redirect_url = httpServletRequest.getParameter("redirect_url");
                 }
             }
 
-            this.logger.info("redirect_url = " + this.redirect_url);
+            this.logger.info("redirect_url = " + redirect_url);
 
             // language
-            if (this.language.startsWith("de")) {
-                this.language = "de";
-            } else if (this.language.startsWith("en")) {
-                this.language = "en";
+            if (language.startsWith("de")) {
+                language = "de";
+            } else if (language.startsWith("en")) {
+                language = "en";
             } else if (httpServletRequest.getParameter("l") != null) {
-                this.language = httpServletRequest.getParameter("l");
+                language = httpServletRequest.getParameter("l");
             } else {
-                this.language = "de";
+                language = "de";
             }
 
-            this.logger.info("language = " + this.language);
+            this.logger.info("language = " + language);
 
             if (access_token.equals("") && httpServletRequest.getParameter("access_token") != null) {
 
@@ -296,7 +296,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
             // 2. Schritt: Service
             if (service.equals("login") || service.equals("logout") || service.equals("change")) {
 
-                this.paiaAuth(httpServletRequest, httpServletResponse, service, access_token, requestBody);
+                this.provideService(httpServletRequest, httpServletResponse, service, access_token, requestBody, format, language, redirect_url);
             }
             else {
 
@@ -318,7 +318,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
                 requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
 
-                this.sendRequestError(httpServletResponse, requestError);
+                this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
             }
         }
     }
@@ -336,11 +336,9 @@ public class PaiaAuthEndpoint extends HttpServlet {
     /**
      * PAIAauth services: Prüfe jeweils die scopes und liefere die Daten
      */
-    private void paiaAuth(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String service, String access_token, String requestBody) throws IOException {
+    private void provideService(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String service, String access_token, String requestBody, String format, String language, String redirect_url) throws IOException {
 
         ObjectMapper mapper = new ObjectMapper();
-
-        String redirect_url = "";
 
         switch (service) {
 
@@ -421,6 +419,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
                                     loginRequest.setUsername(param.split("=")[1]);
                                 } else if (param.startsWith("password")) {
                                     loginRequest.setPassword(param.split("=")[1]);
+                                } else if (param.startsWith("scope")) {
+                                    loginRequest.setScope(param.split("=")[1]);
                                 } else if (param.startsWith("format")) {
                                     format = param.split("=")[1];
                                     this.logger.info("format = " + format);
@@ -442,8 +442,11 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         loginRequest.setGrant_type(httpServletRequest.getParameter("grant_type"));
                         loginRequest.setUsername(httpServletRequest.getParameter("username"));
                         loginRequest.setPassword(httpServletRequest.getParameter("password"));
-                        redirect_url = httpServletRequest.getParameter("redirect_url");
+                        if (httpServletRequest.getParameter("scope") != null && !httpServletRequest.getParameter("scope").equals("")) {
+                            loginRequest.setScope(httpServletRequest.getParameter("scope"));
+                        }
 
+                        redirect_url = httpServletRequest.getParameter("redirect_url");
                     }
                     else {
                         loginRequest = null;
@@ -454,7 +457,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                     LoginResponse loginResponse = null;
 
-                    String scope = "read_patron read_fees read_items write_items";
+                    String scope = "read_patron read_fees read_items write_items"; // TODO config-properties
                     if (loginRequest.getScope() != null && !loginRequest.getScope().equals("")) {
 
                         scope = loginRequest.getScope();
@@ -613,7 +616,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
                         requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
 
-                        this.sendRequestError(httpServletResponse, requestError);
+                        this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                     }
                 }
                 // else Baue HTML-Seite mit login-Formular mittels XSLT
@@ -640,7 +643,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                     requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.description"));
                     requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_FORBIDDEN) + ".2.uri"));
 
-                    if (this.format.equals("html")) {
+                    if (format.equals("html")) {
 
                         if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -650,8 +653,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
                                 htmlTransformation.init(this.config);
 
                                 HashMap<String, String> parameters = new HashMap<String, String>();
-                                parameters.put("lang", this.language);
-                                parameters.put("redirect_url", this.redirect_url);
+                                parameters.put("lang", language);
+                                parameters.put("redirect_url", redirect_url);
 
                                 //String provider = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.auth") + "/" + service;
                                 String provider = this.config.getProperty("service.base_url") + this.config.getProperty("service.endpoint.auth") + "/" + service;
@@ -668,7 +671,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         }
                         else {
                             this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                            this.format = "json";
+                            format = "json";
                         }
                     }
 
@@ -799,7 +802,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_IMPLEMENTED) + ".description"));
                 requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_IMPLEMENTED) + ".uri"));
 
-                this.sendRequestError(httpServletResponse, requestError);
+                this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
 
                 break;
             }
@@ -823,12 +826,12 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".description"));
                 requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".uri"));
 
-                this.sendRequestError(httpServletResponse, requestError);
+                this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
             }
         }
     }
 
-    private void sendRequestError(HttpServletResponse httpServletResponse, RequestError requestError) {
+    private void sendRequestError(HttpServletResponse httpServletResponse, RequestError requestError, String format, String language, String redirect_url) {
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -838,7 +841,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
         try {
 
-            if (this.format.equals("html")) {
+            if (format.equals("html")) {
 
                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -848,8 +851,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         htmlTransformation.init(this.config);
 
                         HashMap<String, String> parameters = new HashMap<String, String>();
-                        parameters.put("lang", this.language);
-                        parameters.put("redirect_uri_params", URLDecoder.decode(this.redirect_url, "UTF-8"));
+                        parameters.put("lang", language);
+                        parameters.put("redirect_uri_params", URLDecoder.decode(redirect_url, "UTF-8"));
 
                         httpServletResponse.setContentType("text/html;charset=UTF-8");
                         httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -861,12 +864,12 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 }
                 else {
                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                    this.format = "json";
+                    format = "json";
                 }
             }
 
             // XML-Ausgabe mit JAXB
-            if (this.format.equals("xml")) {
+            if (format.equals("xml")) {
 
                 try {
 
@@ -884,7 +887,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
             }
 
             // JSON-Ausgabe mit Jackson
-            if (this.format.equals("json")) {
+            if (format.equals("json")) {
 
                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                 mapper.writeValue(httpServletResponse.getWriter(), requestError);

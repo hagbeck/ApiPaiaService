@@ -70,10 +70,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
     private Properties config = new Properties();
     private Logger logger = Logger.getLogger(PaiaCoreEndpoint.class.getName());
 
-    private String format;
-    private String language;
-    private String redirect_url;
-
     /**
      *
      * @throws IOException
@@ -145,6 +141,10 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
         ObjectMapper mapper = new ObjectMapper();
 
+        String format;
+        String language;
+        String redirect_url;
+
         this.logger.debug("[" + config.getProperty("service.name") + "] " + "PathInfo = " + httpServletRequest.getPathInfo());
         this.logger.debug("[" + config.getProperty("service.name") + "] " + "QueryString = " + httpServletRequest.getQueryString());
 
@@ -185,11 +185,11 @@ public class PaiaCoreEndpoint extends HttpServlet {
         this.logger.debug("[" + config.getProperty("service.name") + "] " + "Service: " + service);
         this.logger.debug("[" + config.getProperty("service.name") + "] " + "Patron: " + patronid);
 
-        this.format = "html";
+        format = "html";
 
         if (httpServletRequest.getParameter("format") != null && !httpServletRequest.getParameter("format").equals("")) {
 
-            this.format = httpServletRequest.getParameter("format");
+            format = httpServletRequest.getParameter("format");
         }
         else {
 
@@ -202,21 +202,21 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     this.logger.debug("headerNameKey = " + httpServletRequest.getHeader( headerNameKey ));
 
                     if (httpServletRequest.getHeader( headerNameKey ).contains("text/html")) {
-                        this.format = "html";
+                        format = "html";
                     }
                     else if (httpServletRequest.getHeader( headerNameKey ).contains("application/xml")) {
-                        this.format = "xml";
+                        format = "xml";
                     }
                     else if (httpServletRequest.getHeader( headerNameKey ).contains("application/json")) {
-                        this.format = "json";
+                        format = "json";
                     }
                 }
             }
         }
 
-        this.logger.info("format = " + this.format);
+        this.logger.info("format = " + format);
 
-        if (this.format.equals("html") && Lookup.lookupAll(ObjectToHtmlTransformation.class).size() == 0) {
+        if (format.equals("html") && Lookup.lookupAll(ObjectToHtmlTransformation.class).size() == 0) {
 
             this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_BAD_REQUEST + ": " + "html not implemented!");
 
@@ -236,7 +236,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".description"));
             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".uri"));
 
-            this.sendRequestError(httpServletResponse, requestError);
+            this.sendRequestError(httpServletResponse, requestError, format, "", "");
         }
         else {
 
@@ -315,20 +315,20 @@ public class PaiaCoreEndpoint extends HttpServlet {
             if (patronid.equals("")) {
 
                 // Authorization
-                this.authorize(httpServletRequest, httpServletResponse, documentList);
+                this.authorize(httpServletRequest, httpServletResponse, format, documentList);
             }
             else {
 
-                this.redirect_url = "";
+                redirect_url = "";
 
                 if (httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
 
-                    this.redirect_url = httpServletRequest.getParameter("redirect_url");
+                    redirect_url = httpServletRequest.getParameter("redirect_url");
                 }
 
-                this.logger.info("redirect_url = " + this.redirect_url);
+                this.logger.info("redirect_url = " + redirect_url);
 
-                this.language = "";
+                language = "";
 
                 // PAIA core - function
                 if ((httpServletRequest.getMethod().equals("GET") && (service.equals("patron") || service.equals("fullpatron") ||
@@ -345,8 +345,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         this.logger.debug("[" + config.getProperty("service.name") + "] " + "headerNameKey = " + headerNameKey + " / headerNameValue = " + httpServletRequest.getHeader(headerNameKey));
 
                         if (headerNameKey.equals("Accept-Language")) {
-                            this.language = httpServletRequest.getHeader(headerNameKey);
-                            this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept-Language: " + this.language);
+                            language = httpServletRequest.getHeader(headerNameKey);
+                            this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept-Language: " + language);
                         }
                         if (headerNameKey.equals("Accept")) {
                             accept = httpServletRequest.getHeader(headerNameKey);
@@ -358,14 +358,14 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
 
                     // language
-                    if (this.language.startsWith("de")) {
-                        this.language = "de";
-                    } else if (this.language.startsWith("en")) {
-                        this.language = "en";
+                    if (language.startsWith("de")) {
+                        language = "de";
+                    } else if (language.startsWith("en")) {
+                        language = "en";
                     } else if (httpServletRequest.getParameter("l") != null) {
-                        this.language = httpServletRequest.getParameter("l");
+                        language = httpServletRequest.getParameter("l");
                     } else {
-                        this.language = "de";
+                        language = "de";
                     }
 
                     // if not exists token: read request parameter
@@ -439,12 +439,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     if (isAuthorized) {
 
                         // execute query
-                        this.provideService(httpServletRequest, httpServletResponse, patronid, service, documentList);
+                        this.provideService(httpServletRequest, httpServletResponse, patronid, service, format, language, redirect_url, documentList);
                     }
                     else {
 
                         // Authorization
-                        this.authorize(httpServletRequest, httpServletResponse, documentList);
+                        this.authorize(httpServletRequest, httpServletResponse, format, documentList);
                     }
                 }
                 else {
@@ -466,7 +466,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".description"));
                     requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_METHOD_NOT_ALLOWED) + ".uri"));
 
-                    this.sendRequestError(httpServletResponse, requestError);
+                    this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                 }
             }
         }
@@ -488,7 +488,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
      * @param httpServletResponse
      * @throws IOException
      */
-    private void authorize(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, DocumentList documents) throws IOException {
+    private void authorize(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String format, DocumentList documents) throws IOException {
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -509,7 +509,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
         requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".uri"));
 
         // XML-Ausgabe mit JAXB
-        if (this.format.equals("xml")) {
+        if (format.equals("xml")) {
 
             try {
 
@@ -528,14 +528,14 @@ public class PaiaCoreEndpoint extends HttpServlet {
         }
 
         // JSON-Ausgabe mit Jackson
-        if (this.format.equals("json")) {
+        if (format.equals("json")) {
 
             httpServletResponse.setContentType("application/json;charset=UTF-8");
             mapper.writeValue(httpServletResponse.getWriter(), requestError);
         }
 
         // html > redirect zu "PAIA auth - login" mit redirect_url = "PAIA core - service"
-        if (this.format.equals("html")) {
+        if (format.equals("html")) {
 
             httpServletResponse.setContentType("text/html;charset=UTF-8");
 
@@ -570,7 +570,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
     /**
      * PAIA core services: Prüfe jeweils die scopes und liefere die Daten
      */
-    private void provideService(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, DocumentList documents) throws IOException {
+    private void provideService(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, String format, String language, String redirect_url, DocumentList documents) throws IOException {
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -597,7 +597,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_patron");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -607,7 +607,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                         htmlTransformation.init(this.config);
 
                                         HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
+                                        parameters.put("lang", language);
                                         parameters.put("service", service);
 
                                         httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -620,12 +620,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else {
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -644,7 +644,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), patron);
@@ -668,7 +668,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -687,7 +687,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_patron");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -697,7 +697,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                         htmlTransformation.init(this.config);
 
                                         HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
+                                        parameters.put("lang", language);
                                         parameters.put("service", service);
 
                                         httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -710,12 +710,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else {
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -734,7 +734,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), patron);
@@ -758,7 +758,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -776,7 +776,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -786,7 +786,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                         htmlTransformation.init(this.config);
 
                                         HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
+                                        parameters.put("lang", language);
                                         parameters.put("service", service);
 
                                         httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -799,12 +799,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else {
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -823,7 +823,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
@@ -847,7 +847,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -865,7 +865,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -875,7 +875,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                         htmlTransformation.init(this.config);
 
                                         HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
+                                        parameters.put("lang", language);
                                         parameters.put("service", service);
 
                                         httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -888,12 +888,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else {
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -912,7 +912,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
@@ -936,7 +936,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -954,7 +954,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -964,7 +964,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                         htmlTransformation.init(this.config);
 
                                         HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
+                                        parameters.put("lang", language);
                                         parameters.put("service", service);
 
                                         httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -977,12 +977,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else {
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -1001,7 +1001,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
@@ -1025,7 +1025,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -1043,7 +1043,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -1053,7 +1053,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                         htmlTransformation.init(this.config);
 
                                         HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
+                                        parameters.put("lang", language);
                                         parameters.put("service", service);
 
                                         httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -1066,12 +1066,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else {
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -1090,7 +1090,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
@@ -1114,7 +1114,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -1132,7 +1132,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -1142,7 +1142,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                         htmlTransformation.init(this.config);
 
                                         HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
+                                        parameters.put("lang", language);
                                         parameters.put("service", service);
 
                                         httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -1155,12 +1155,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else {
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -1179,7 +1179,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
@@ -1203,7 +1203,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -1221,7 +1221,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -1231,7 +1231,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                         htmlTransformation.init(this.config);
 
                                         HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
+                                        parameters.put("lang", language);
                                         parameters.put("service", service);
 
                                         httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -1244,12 +1244,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else {
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -1268,7 +1268,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
@@ -1292,7 +1292,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -1310,7 +1310,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -1320,7 +1320,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                         htmlTransformation.init(this.config);
 
                                         HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
+                                        parameters.put("lang", language);
                                         parameters.put("service", service);
 
                                         httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -1333,12 +1333,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else {
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -1357,7 +1357,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
@@ -1381,7 +1381,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -1410,12 +1410,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
-                                    this.logger.info("redirect_url = " + this.redirect_url);
-                                    if (!this.redirect_url.equals("")) {
+                                    this.logger.info("redirect_url = " + redirect_url);
+                                    if (!redirect_url.equals("")) {
 
                                         httpServletResponse.sendRedirect(redirect_url);
                                     } else {
@@ -1426,7 +1426,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                             htmlTransformation.init(this.config);
 
                                             HashMap<String, String> parameters = new HashMap<String, String>();
-                                            parameters.put("lang", this.language);
+                                            parameters.put("lang", language);
                                             parameters.put("service", service);
 
                                             httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -1439,12 +1439,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else{
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -1463,7 +1463,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
@@ -1487,7 +1487,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -1513,7 +1513,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -1523,7 +1523,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                         htmlTransformation.init(this.config);
 
                                         HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
+                                        parameters.put("lang", language);
                                         parameters.put("service", service);
 
                                         httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -1536,12 +1536,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else {
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -1560,7 +1560,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
@@ -1584,7 +1584,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -1610,7 +1610,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -1620,7 +1620,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                         htmlTransformation.init(this.config);
 
                                         HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
+                                        parameters.put("lang", language);
                                         parameters.put("service", service);
 
                                         httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -1633,12 +1633,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else {
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -1657,7 +1657,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), documentList);
@@ -1681,7 +1681,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -1699,7 +1699,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_fees");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
-                            if (this.format.equals("html")) {
+                            if (format.equals("html")) {
 
                                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -1709,7 +1709,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                         htmlTransformation.init(this.config);
 
                                         HashMap<String, String> parameters = new HashMap<String, String>();
-                                        parameters.put("lang", this.language);
+                                        parameters.put("lang", language);
                                         parameters.put("service", service);
 
                                         httpServletResponse.setContentType("text/html;charset=UTF-8");
@@ -1722,12 +1722,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                                 else {
                                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                                    this.format = "json";
+                                    format = "json";
                                 }
                             }
 
                             // XML-Ausgabe mit JAXB
-                            if (this.format.equals("xml")) {
+                            if (format.equals("xml")) {
 
                                 try {
 
@@ -1746,7 +1746,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             // JSON-Ausgabe mit Jackson
-                            if (this.format.equals("json")) {
+                            if (format.equals("json")) {
 
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                                 mapper.writeValue(httpServletResponse.getWriter(), feeList);
@@ -1770,7 +1770,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                            this.sendRequestError(httpServletResponse, requestError);
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         }
 
                         break;
@@ -1802,7 +1802,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_FOUND) + ".description"));
                     requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_FOUND) + ".uri"));
 
-                    this.sendRequestError(httpServletResponse, requestError);
+                    this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                 }
                 else {
 
@@ -1824,7 +1824,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
                     requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-                    this.sendRequestError(httpServletResponse, requestError);
+                    this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                 }
             }
             catch (Exception e) {
@@ -1852,11 +1852,11 @@ public class PaiaCoreEndpoint extends HttpServlet {
             requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".description"));
             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_SERVICE_UNAVAILABLE) + ".uri"));
 
-            this.sendRequestError(httpServletResponse, requestError);
+            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
         }
     }
 
-    private void sendRequestError(HttpServletResponse httpServletResponse, RequestError requestError) {
+    private void sendRequestError(HttpServletResponse httpServletResponse, RequestError requestError, String format, String language, String redirect_url) {
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -1867,7 +1867,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
         try {
 
             // html
-            if (this.format.equals("html")) {
+            if (format.equals("html")) {
 
                 if (Lookup.lookupAll(ObjectToHtmlTransformation.class).size() > 0) {
 
@@ -1877,8 +1877,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         htmlTransformation.init(this.config);
 
                         HashMap<String, String> parameters = new HashMap<String, String>();
-                        parameters.put("lang", this.language);
-                        parameters.put("redirect_uri_params", URLDecoder.decode(this.redirect_url, "UTF-8"));
+                        parameters.put("lang", language);
+                        parameters.put("redirect_uri_params", URLDecoder.decode(redirect_url, "UTF-8"));
 
                         httpServletResponse.setContentType("text/html;charset=UTF-8");
                         httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -1890,12 +1890,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 }
                 else {
                     this.logger.error("ObjectToHtmlTransformation not configured! Switch to JSON.");
-                    this.format = "json";
+                    format = "json";
                 }
             }
 
             // XML-Ausgabe mit JAXB
-            if (this.format.equals("xml")) {
+            if (format.equals("xml")) {
 
                 try {
 
@@ -1913,7 +1913,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
             }
 
             // JSON-Ausgabe mit Jackson
-            if (this.format.equals("json")) {
+            if (format.equals("json")) {
 
                 httpServletResponse.setContentType("application/json;charset=UTF-8");
                 mapper.writeValue(httpServletResponse.getWriter(), requestError);

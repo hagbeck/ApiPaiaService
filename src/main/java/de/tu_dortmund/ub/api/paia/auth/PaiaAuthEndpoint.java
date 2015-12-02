@@ -291,7 +291,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
             String requestBody = jb.toString();
 
-            httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+            httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
+            httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
 
             // 2. Schritt: Service
             if (service.equals("login") || service.equals("logout") || service.equals("change")) {
@@ -328,7 +329,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
         httpServletResponse.setHeader("Access-Control-Allow-Methods", this.config.getProperty("Access-Control-Allow-Methods"));
         httpServletResponse.addHeader("Access-Control-Allow-Headers", this.config.getProperty("Access-Control-Allow-Headers"));
         httpServletResponse.setHeader("Accept", this.config.getProperty("Accept"));
-        httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
 
         httpServletResponse.getWriter().println();
     }
@@ -526,7 +528,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         loginResponse.setRefresh_expires_in(null);
                         loginResponse.setPatron(loginRequest.getUsername());
 
-                        httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+                        httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
+                        httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
                         httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
                         // add cookie
@@ -625,7 +628,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
                     httpServletResponse.setHeader("WWW-Authentificate", "Bearer");
                     httpServletResponse.setHeader("WWW-Authentificate", "Bearer realm=\"PAIA auth\"");
                     httpServletResponse.setContentType("application/json");
-                    httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+                    httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
+                    httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
 
                     // Error handling mit suppress_response_codes=true
                     if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -745,7 +749,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
                     }
                 }
 
-                httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+                httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
+                httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
                 httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
                 // delete cookie
@@ -832,6 +837,9 @@ public class PaiaAuthEndpoint extends HttpServlet {
     }
 
     private void sendRequestError(HttpServletResponse httpServletResponse, RequestError requestError, String format, String language, String redirect_url) {
+
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
 
         ObjectMapper mapper = new ObjectMapper();
 

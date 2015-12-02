@@ -285,6 +285,11 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     Document document = new Document();
                     document.setEdition(httpServletRequest.getParameter("document_id"));
 
+                    if (httpServletRequest.getParameter("storage_id") != null && !httpServletRequest.getParameter("storage_id").equals("")) {
+
+                        document.setStorage_id(httpServletRequest.getParameter("storage_id"));
+                    }
+
                     documentList = new DocumentList();
                     documentList.setDoc(new ArrayList<Document>());
                     documentList.getDoc().add(document);
@@ -369,12 +374,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
 
                     // if not exists token: read request parameter
-                    if (authorization.equals("") && httpServletRequest.getParameter("access_token") != null && !httpServletRequest.getParameter("access_token").equals("")) {
+                    if ((authorization == null || authorization.equals("")) && httpServletRequest.getParameter("access_token") != null && !httpServletRequest.getParameter("access_token").equals("")) {
                         authorization = httpServletRequest.getParameter("access_token");
                     }
 
                     // if not exists token
-                    if (authorization.equals("")) {
+                    if (authorization == null || authorization.equals("")) {
 
                         // if exists PaiaService-Cookie: read content
                         Cookie[] cookies = httpServletRequest.getCookies();
@@ -395,15 +400,39 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                     break;
                                 }
                             }
+
+                            // if not exists token - search for Shibboleth-Token
+                            if (authorization == null || authorization.equals("")) {
+
+                                if (Lookup.lookupAll(AuthorizationInterface.class).size() > 0) {
+
+                                    AuthorizationInterface authorizationInterface = Lookup.lookup(AuthorizationInterface.class);
+                                    // init Authorization Service
+                                    authorizationInterface.init(this.config);
+
+                                    try {
+
+                                        authorization = authorizationInterface.getAuthCookies(cookies);
+                                    }
+                                    catch (AuthorizationException e) {
+
+                                        // TODO correct error handling
+                                        this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + "!");
+                                    }
+
+                                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization);
+                                }
+                            }
                         }
                     }
 
-                    httpServletResponse.setHeader("Access-Control-Allow-Origin", "*");
+                    httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
+                    httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
 
                     // check token ...
                     boolean isAuthorized = false;
 
-                    if (!authorization.equals("")) {
+                    if (authorization != null && !authorization.equals("")) {
 
                         if (Lookup.lookupAll(AuthorizationInterface.class).size() > 0) {
 
@@ -420,7 +449,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 // TODO correct error handling
                                 this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + "!");
                             }
-                        } else {
+                        }
+                        else {
 
                             // TODO correct error handling
                             this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": " + "Authorization Interface not implemented!");
@@ -428,13 +458,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
 
                     this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
-
-                    // ... - if not is authorized - against DFN-AAI service
-                    if (!isAuthorized) {
-
-                        // TODO if exists OpenAM-Session-Cookie: read content
-                        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
-                    }
 
                     if (isAuthorized) {
 
@@ -477,7 +500,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
         httpServletResponse.setHeader("Access-Control-Allow-Methods", this.config.getProperty("Access-Control-Allow-Methods"));
         httpServletResponse.addHeader("Access-Control-Allow-Headers", this.config.getProperty("Access-Control-Allow-Headers"));
         httpServletResponse.setHeader("Accept", this.config.getProperty("Accept"));
-        httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
 
         httpServletResponse.getWriter().println();
     }
@@ -489,6 +513,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
      * @throws IOException
      */
     private void authorize(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String format, DocumentList documents) throws IOException {
+
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -571,6 +598,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
      * PAIA core services: Prüfe jeweils die scopes und liefere die Daten
      */
     private void provideService(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, String format, String language, String redirect_url, DocumentList documents) throws IOException {
+
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -1857,6 +1887,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
     }
 
     private void sendRequestError(HttpServletResponse httpServletResponse, RequestError requestError, String format, String language, String redirect_url) {
+
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
 
         ObjectMapper mapper = new ObjectMapper();
 

@@ -28,6 +28,7 @@ import de.tu_dortmund.ub.api.paia.core.model.Patron;
 import de.tu_dortmund.ub.api.paia.core.model.DocumentList;
 import de.tu_dortmund.ub.api.paia.core.model.FeeList;
 
+import java.util.HashMap;
 import java.util.Properties;
 
 /**
@@ -41,6 +42,8 @@ public interface IntegratedLibrarySystem {
      * @param properties
      */
     void init(Properties properties);
+
+    HashMap<String,String> health(Properties properties);
 
     Patron patron(String patronid, boolean extended) throws ILSException;
 

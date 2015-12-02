@@ -24,7 +24,9 @@ SOFTWARE.
 
 package de.tu_dortmund.ub.api.paia.auth;
 
+import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServletResponse;
+import java.util.HashMap;
 import java.util.Properties;
 
 /**
@@ -34,6 +36,10 @@ import java.util.Properties;
 public interface AuthorizationInterface {
 
     void init(Properties properties);
+
+    HashMap<String,String> health(Properties properties);
+
+    String getAuthCookies(Cookie[] cookies) throws AuthorizationException;
 
     boolean isTokenValid(HttpServletResponse httpServletResponse, String service, String patronid, String access_token) throws AuthorizationException;
 }

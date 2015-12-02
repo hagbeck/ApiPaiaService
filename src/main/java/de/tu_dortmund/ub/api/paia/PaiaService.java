@@ -89,6 +89,10 @@ public class PaiaService {
         context.setContextPath(config.getProperty("service.contextPath"));
         server.setHandler(context);
 
+        context.addServlet(new ServletHolder(new PingEndpoint(conffile)), config.getProperty("service.endpoint.ping"));
+
+        context.addServlet(new ServletHolder(new HealthEndpoint(conffile)), config.getProperty("service.endpoint.health"));
+
         context.addServlet(new ServletHolder(new PaiaAuthEndpoint(conffile)), config.getProperty("service.endpoint.auth") + "/*");
 
         context.addServlet(new ServletHolder(new PaiaCoreEndpoint(conffile)), config.getProperty("service.endpoint.core") + "/*");

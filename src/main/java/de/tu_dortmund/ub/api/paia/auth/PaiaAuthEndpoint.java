@@ -25,6 +25,7 @@ SOFTWARE.
 package de.tu_dortmund.ub.api.paia.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.tu_dortmund.ub.api.paia.core.model.Patron;
 import de.tu_dortmund.ub.api.paia.model.RequestError;
 import de.tu_dortmund.ub.api.paia.auth.model.LoginRequest;
 import de.tu_dortmund.ub.api.paia.auth.model.LoginResponse;
@@ -290,6 +291,50 @@ public class PaiaAuthEndpoint extends HttpServlet {
             } catch (Exception e) { /*report an error*/ }
 
             String requestBody = jb.toString();
+
+            if (requestBody.equals("")) {
+
+                LoginRequest loginRequest = null;
+
+                if (httpServletRequest.getParameter("username") != null && !httpServletRequest.getParameter("username").equals("")) {
+
+                    if (loginRequest == null) {
+
+                        loginRequest = new LoginRequest();
+                    }
+                    loginRequest.setUsername(httpServletRequest.getParameter("username"));
+                }
+                if (httpServletRequest.getParameter("password") != null && !httpServletRequest.getParameter("password").equals("")) {
+
+                    if (loginRequest == null) {
+
+                        loginRequest = new LoginRequest();
+                    }
+                    loginRequest.setPassword(httpServletRequest.getParameter("password"));
+                }
+                if (httpServletRequest.getParameter("grant_type") != null && !httpServletRequest.getParameter("grant_type").equals("")) {
+
+                    if (loginRequest == null) {
+
+                        loginRequest = new LoginRequest();
+                    }
+                    loginRequest.setGrant_type(httpServletRequest.getParameter("grant_type"));
+                }
+                if (httpServletRequest.getParameter("scope") != null && !httpServletRequest.getParameter("scope").equals("")) {
+
+                    if (loginRequest == null) {
+
+                        loginRequest = new LoginRequest();
+                    }
+                    loginRequest.setScope(httpServletRequest.getParameter("scope"));
+                }
+
+                StringWriter stringWriter = new StringWriter();
+                mapper.writeValue(stringWriter, loginRequest);
+                requestBody = stringWriter.toString();
+            }
+
+            this.logger.info(requestBody);
 
             httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
             httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));

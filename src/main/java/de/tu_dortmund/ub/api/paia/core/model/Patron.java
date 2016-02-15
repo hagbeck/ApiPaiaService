@@ -53,6 +53,8 @@ public class Patron {
     // 4 - inactive because account expired and outstanding fees
     private int status = -1;
 
+    private String account;
+
     private String username;
     private String old_password;
     private String new_password;
@@ -78,7 +80,6 @@ public class Patron {
     private String usergroup;
     private String externalid;
     private String faculty;
-
 
     @XmlElement
     public String getName() {
@@ -111,8 +112,15 @@ public class Patron {
     }
 
     public void setExpires(String expires) {
-        String tmp[] = expires.split("\\.");
-        this.expires = tmp[2] + "-" + tmp[1] + "-" + tmp[0];
+
+        if (expires.contains(".")) {
+            String tmp[] = expires.split("\\.");
+            this.expires = tmp[2] + "-" + tmp[1] + "-" + tmp[0];
+        }
+        if (expires.contains("-")) {
+            String tmp[] = expires.split("-");
+            this.expires = tmp[2] + "." + tmp[1] + "." + tmp[0];
+        }
     }
 
     @XmlElement
@@ -122,6 +130,15 @@ public class Patron {
 
     public void setStatus(int status) {
         this.status = status;
+    }
+
+    @XmlElement
+    public String getAccount() {
+        return account;
+    }
+
+    public void setAccount(String account) {
+        this.account = account;
     }
 
     @XmlElement
@@ -175,8 +192,19 @@ public class Patron {
     }
 
     public void setDateofbirth(String dateofbirth) {
-        String tmp[] = dateofbirth.split("\\.");
-        this.dateofbirth = tmp[2] + "-" + tmp[1] + "-" + tmp[0];
+
+        //String tmp[] = dateofbirth.split("\\.");
+        //this.dateofbirth = tmp[2] + "-" + tmp[1] + "-" + tmp[0];
+
+        if (dateofbirth.contains(".")) {
+            String tmp[] = dateofbirth.split("\\.");
+            this.dateofbirth = tmp[2] + "-" + tmp[1] + "-" + tmp[0];
+        }
+        if (dateofbirth.contains("-")) {
+            String tmp[] = dateofbirth.split("-");
+            this.dateofbirth = tmp[2] + "." + tmp[1] + "." + tmp[0];
+        }
+
     }
 
     @XmlElement
@@ -313,5 +341,6 @@ public class Patron {
     public void setFaculty(String faculty) {
         this.faculty = faculty;
     }
+
 
 }

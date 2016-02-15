@@ -25,6 +25,10 @@ Access-Control-Allow-Headers=Authorization, Accept, Content-Type, Origin
 Accept=application/json, application/xml
 Access-Control-Allow-Origin=*
 
+### PAAA
+paaa.core.endpoint=URL
+
+
 ###########################
 # PaiaService Error Codes #
 ###########################

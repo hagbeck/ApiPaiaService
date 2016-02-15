@@ -25,6 +25,8 @@ SOFTWARE.
 package de.tu_dortmund.ub.api.paia.auth;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import de.tu_dortmund.ub.api.paia.auth.model.ChangeRequest;
+import de.tu_dortmund.ub.api.paia.auth.model.NewPasswordRequest;
 import de.tu_dortmund.ub.api.paia.core.model.Patron;
 import de.tu_dortmund.ub.api.paia.model.RequestError;
 import de.tu_dortmund.ub.api.paia.auth.model.LoginRequest;
@@ -36,6 +38,7 @@ import org.apache.commons.io.IOUtils;
 import org.apache.http.Consts;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
@@ -292,55 +295,13 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
             String requestBody = jb.toString();
 
-            if (requestBody.equals("")) {
-
-                LoginRequest loginRequest = null;
-
-                if (httpServletRequest.getParameter("username") != null && !httpServletRequest.getParameter("username").equals("")) {
-
-                    if (loginRequest == null) {
-
-                        loginRequest = new LoginRequest();
-                    }
-                    loginRequest.setUsername(httpServletRequest.getParameter("username"));
-                }
-                if (httpServletRequest.getParameter("password") != null && !httpServletRequest.getParameter("password").equals("")) {
-
-                    if (loginRequest == null) {
-
-                        loginRequest = new LoginRequest();
-                    }
-                    loginRequest.setPassword(httpServletRequest.getParameter("password"));
-                }
-                if (httpServletRequest.getParameter("grant_type") != null && !httpServletRequest.getParameter("grant_type").equals("")) {
-
-                    if (loginRequest == null) {
-
-                        loginRequest = new LoginRequest();
-                    }
-                    loginRequest.setGrant_type(httpServletRequest.getParameter("grant_type"));
-                }
-                if (httpServletRequest.getParameter("scope") != null && !httpServletRequest.getParameter("scope").equals("")) {
-
-                    if (loginRequest == null) {
-
-                        loginRequest = new LoginRequest();
-                    }
-                    loginRequest.setScope(httpServletRequest.getParameter("scope"));
-                }
-
-                StringWriter stringWriter = new StringWriter();
-                mapper.writeValue(stringWriter, loginRequest);
-                requestBody = stringWriter.toString();
-            }
-
             this.logger.info(requestBody);
 
             httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
             httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
 
             // 2. Schritt: Service
-            if (service.equals("login") || service.equals("logout") || service.equals("change")) {
+            if (service.equals("login") || service.equals("logout") || service.equals("change") || service.equals("renew")) {
 
                 this.provideService(httpServletRequest, httpServletResponse, service, access_token, requestBody, format, language, redirect_url);
             }
@@ -447,6 +408,11 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 try {
 
                     loginRequest = mapper.readValue(requestBody, LoginRequest.class);
+
+                    if (httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
+
+                        redirect_url = httpServletRequest.getParameter("redirect_url");
+                    }
                 }
                 catch (Exception e) {
 
@@ -482,8 +448,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
                     }
                     else if (httpServletRequest.getParameter("grant_type") != null && !httpServletRequest.getParameter("grant_type").equals("") &&
                             httpServletRequest.getParameter("username") != null && !httpServletRequest.getParameter("username").equals("") &&
-                            httpServletRequest.getParameter("password") != null && !httpServletRequest.getParameter("password").equals("") &&
-                            httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
+                            httpServletRequest.getParameter("password") != null && !httpServletRequest.getParameter("password").equals("")
+                            ) {
 
                         loginRequest = new LoginRequest();
                         loginRequest.setGrant_type(httpServletRequest.getParameter("grant_type"));
@@ -492,8 +458,10 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         if (httpServletRequest.getParameter("scope") != null && !httpServletRequest.getParameter("scope").equals("")) {
                             loginRequest.setScope(httpServletRequest.getParameter("scope"));
                         }
+                        if (httpServletRequest.getParameter("redirect_url") != null && !httpServletRequest.getParameter("redirect_url").equals("")) {
 
-                        redirect_url = httpServletRequest.getParameter("redirect_url");
+                            redirect_url = httpServletRequest.getParameter("redirect_url");
+                        }
                     }
                     else {
                         loginRequest = null;
@@ -836,23 +804,239 @@ public class PaiaAuthEndpoint extends HttpServlet {
             }
             case "change": {
 
-                // Error handling mit suppress_response_codes=true
-                if (httpServletRequest.getParameter("suppress_response_codes") != null && !httpServletRequest.getParameter("suppress_response_codes").equals("")) {
-                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                // TODO build ChangeRequest object
+                ChangeRequest changeRequest = null;
+
+                try {
+
+                    changeRequest = mapper.readValue(requestBody, ChangeRequest.class);
+
+                    // PAIA.patron
+                    CloseableHttpClient httpclient = HttpClients.createDefault();
+
+                    String url = "http://" + httpServletRequest.getHeader("Host") + "/" + this.config.getProperty("service.endpoint.core") + "/" + changeRequest.getPatron() + "/patron";
+                    this.logger.info("PAIA.core-URL: " + url);
+
+                    HttpGet httpGet = new HttpGet(url);
+                    httpGet.addHeader("Authorization", "Bearer " + access_token);
+                    httpGet.addHeader("Accept", "application/json");
+
+                    CloseableHttpResponse httpResponse = httpclient.execute(httpGet);
+
+                    try {
+
+                        int statusCode = httpResponse.getStatusLine().getStatusCode();
+                        HttpEntity httpEntity = httpResponse.getEntity();
+
+                        switch (statusCode) {
+
+                            case 200: {
+
+                                this.logger.info("[" + this.config.getProperty("service.name") + "] " + "SUCCESS logout(): HTTP STATUS = " + statusCode);
+
+                                StringWriter writer = new StringWriter();
+                                IOUtils.copy(httpEntity.getContent(), writer, "UTF-8");
+                                Patron patron = mapper.readValue(writer.toString(), Patron.class);
+
+                                // changePassword via PAAA.update
+                                String requestBodyString = "{ \"account\" : \"" + patron.getAccount() + "\", \"opacpin\" : \"" + changeRequest.getNewPassword() + "\"}";
+
+                                String paaa = this.config.getProperty("paaa.core.endpoint") + "/" + patron.getUsername() + "/updatepatron";
+                                this.logger.info("PAAA-URL: " + paaa);
+
+                                HttpPost httpPost = new HttpPost(paaa);
+                                httpPost.addHeader("Authorization","Bearer " + this.config.getProperty("paaa.api.key"));
+                                httpPost.addHeader("Accept","application/json");
+
+                                StringEntity stringEntity = new StringEntity(requestBodyString, ContentType.create("application/json", Consts.UTF_8));
+                                httpPost.setEntity(stringEntity);
+
+                                CloseableHttpResponse httpResponse1 = httpclient.execute(httpPost);
+
+                                try {
+
+                                    int statusCode1 = httpResponse1.getStatusLine().getStatusCode();
+                                    HttpEntity httpEntity1 = httpResponse1.getEntity();
+
+                                    switch (statusCode1) {
+
+                                        case 200: {
+
+                                            this.logger.info("[" + this.config.getProperty("service.name") + "] " + "SUCCESS logout(): HTTP STATUS = " + statusCode1);
+
+                                            break;
+                                        }
+                                        default: {
+
+                                            this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode1);
+                                            throw new Exception("ERROR in PAAA.updatepatron.");
+                                        }
+                                    }
+
+                                    EntityUtils.consume(httpEntity1);
+                                }
+                                finally {
+                                    httpResponse.close();
+                                }
+
+                                break;
+                            }
+                            default: {
+
+                                this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode);
+                            }
+                        }
+
+                        EntityUtils.consume(httpEntity);
+                    }
+                    finally {
+                        httpResponse.close();
+                    }
                 }
-                // Error handling mit suppress_response_codes=false (=default)
-                else {
-                    httpServletResponse.setStatus(HttpServletResponse.SC_NOT_IMPLEMENTED);
+                catch (Exception e) {
+
+                    e.printStackTrace();
+
+                    // Error handling mit suppress_response_codes=true
+                    if (httpServletRequest.getParameter("suppress_response_codes") != null && !httpServletRequest.getParameter("suppress_response_codes").equals("")) {
+                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                    }
+                    // Error handling mit suppress_response_codes=false (=default)
+                    else {
+                        httpServletResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                    }
+
+                    // Json für Response body
+                    RequestError requestError = new RequestError();
+                    requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST)));
+                    requestError.setCode(HttpServletResponse.SC_BAD_REQUEST);
+                    requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".description"));
+                    requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".uri"));
+
+                    this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                 }
 
-                // Json für Response body
-                RequestError requestError = new RequestError();
-                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_IMPLEMENTED)));
-                requestError.setCode(HttpServletResponse.SC_NOT_IMPLEMENTED);
-                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_IMPLEMENTED) + ".description"));
-                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_NOT_IMPLEMENTED) + ".uri"));
+                break;
+            }
+            case "renew": {
 
-                this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
+                // TODO build ChangeRequest object
+                NewPasswordRequest newPasswordRequest = null;
+
+                try {
+
+                    newPasswordRequest = mapper.readValue(requestBody, NewPasswordRequest.class);
+
+                    // PAIA.patron
+                    CloseableHttpClient httpclient = HttpClients.createDefault();
+
+                    String url = "http://" + httpServletRequest.getHeader("Host") + "/" + this.config.getProperty("service.endpoint.core") + "/" + newPasswordRequest.getPatron() + "/fullpatron";
+                    this.logger.info("PAIA.core-URL: " + url);
+
+                    HttpGet httpGet = new HttpGet(url);
+                    httpGet.addHeader("Authorization", "Bearer " + "267db2ba-7a0f-4fdd-b553-a810fdca8348");
+                    httpGet.addHeader("Accept", "application/json");
+
+                    CloseableHttpResponse httpResponse = httpclient.execute(httpGet);
+
+                    try {
+
+                        int statusCode = httpResponse.getStatusLine().getStatusCode();
+                        HttpEntity httpEntity = httpResponse.getEntity();
+
+                        switch (statusCode) {
+
+                            case 200: {
+
+                                this.logger.info("[" + this.config.getProperty("service.name") + "] " + "SUCCESS logout(): HTTP STATUS = " + statusCode);
+
+                                StringWriter writer = new StringWriter();
+                                IOUtils.copy(httpEntity.getContent(), writer, "UTF-8");
+                                Patron patron = mapper.readValue(writer.toString(), Patron.class);
+
+                                // changePassword via PAAA.update
+                                String tmp[] = patron.getDateofbirth().split("\\.");
+                                String newPassword = tmp[0] + tmp[1] + tmp[2].substring(2);
+
+                                String requestBodyString = "{ \"account\" : \"" + patron.getAccount() + "\", \"opacpin\" : \"" + newPassword + "\"}";
+
+                                String paaa = this.config.getProperty("paaa.core.endpoint") + "/" + patron.getUsername() + "/updatepatron";
+                                this.logger.info("PAAA-URL: " + paaa);
+
+                                HttpPost httpPost = new HttpPost(paaa);
+                                httpPost.addHeader("Authorization","Bearer " + this.config.getProperty("paaa.api.key"));
+                                httpPost.addHeader("Accept","application/json");
+
+                                StringEntity stringEntity = new StringEntity(requestBodyString, ContentType.create("application/json", Consts.UTF_8));
+                                httpPost.setEntity(stringEntity);
+
+                                CloseableHttpResponse httpResponse1 = httpclient.execute(httpPost);
+
+                                try {
+
+                                    int statusCode1 = httpResponse1.getStatusLine().getStatusCode();
+                                    HttpEntity httpEntity1 = httpResponse1.getEntity();
+
+                                    switch (statusCode1) {
+
+                                        case 200: {
+
+                                            this.logger.info("[" + this.config.getProperty("service.name") + "] " + "SUCCESS logout(): HTTP STATUS = " + statusCode1);
+
+                                            // TODO E-Mail to user
+                                            this.logger.info("Password resetted. Mail send.");
+
+                                            break;
+                                        }
+                                        default: {
+
+                                            this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode1);
+                                            throw new Exception("ERROR in PAAA.updatepatron.");
+                                        }
+                                    }
+
+                                    EntityUtils.consume(httpEntity1);
+                                }
+                                finally {
+                                    httpResponse.close();
+                                }
+
+                                break;
+                            }
+                            default: {
+
+                                this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode);
+                            }
+                        }
+
+                        EntityUtils.consume(httpEntity);
+                    }
+                    finally {
+                        httpResponse.close();
+                    }
+                }
+                catch (Exception e) {
+
+                    e.printStackTrace();
+
+                    // Error handling mit suppress_response_codes=true
+                    if (httpServletRequest.getParameter("suppress_response_codes") != null && !httpServletRequest.getParameter("suppress_response_codes").equals("")) {
+                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                    }
+                    // Error handling mit suppress_response_codes=false (=default)
+                    else {
+                        httpServletResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                    }
+
+                    // Json für Response body
+                    RequestError requestError = new RequestError();
+                    requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST)));
+                    requestError.setCode(HttpServletResponse.SC_BAD_REQUEST);
+                    requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".description"));
+                    requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_BAD_REQUEST) + ".uri"));
+
+                    this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
+                }
 
                 break;
             }

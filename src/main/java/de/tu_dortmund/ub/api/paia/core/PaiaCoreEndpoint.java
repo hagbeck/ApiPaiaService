@@ -25,11 +25,11 @@ SOFTWARE.
 package de.tu_dortmund.ub.api.paia.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import de.tu_dortmund.ub.api.paia.auth.AuthorizationException;
-import de.tu_dortmund.ub.api.paia.auth.AuthorizationInterface;
+import de.tu_dortmund.ub.api.paia.interfaces.AuthorizationException;
+import de.tu_dortmund.ub.api.paia.interfaces.AuthorizationInterface;
 import de.tu_dortmund.ub.api.paia.auth.model.LoginResponse;
-import de.tu_dortmund.ub.api.paia.core.ils.ILSException;
-import de.tu_dortmund.ub.api.paia.core.ils.IntegratedLibrarySystem;
+import de.tu_dortmund.ub.api.paia.interfaces.LibraryManagementSystemException;
+import de.tu_dortmund.ub.api.paia.interfaces.LibraryManagementSystem;
 import de.tu_dortmund.ub.api.paia.core.model.Patron;
 import de.tu_dortmund.ub.api.paia.core.model.Document;
 import de.tu_dortmund.ub.api.paia.core.model.DocumentList;
@@ -604,18 +604,18 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
         ObjectMapper mapper = new ObjectMapper();
 
-        if (Lookup.lookupAll(IntegratedLibrarySystem.class).size() > 0) {
+        if (Lookup.lookupAll(LibraryManagementSystem.class).size() > 0) {
 
             try {
-                IntegratedLibrarySystem integratedLibrarySystem = Lookup.lookup(IntegratedLibrarySystem.class);
+                LibraryManagementSystem libraryManagementSystem = Lookup.lookup(LibraryManagementSystem.class);
                 // init ILS
-                integratedLibrarySystem.init(this.config);
+                libraryManagementSystem.init(this.config);
 
                 switch (service) {
 
                     case "patron": {
 
-                        Patron patron = integratedLibrarySystem.patron(patronid, false);
+                        Patron patron = libraryManagementSystem.patron(patronid, false);
 
                         if (patron != null) {
 
@@ -705,7 +705,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "fullpatron": {
 
-                        Patron patron = integratedLibrarySystem.patron(patronid, true);
+                        Patron patron = libraryManagementSystem.patron(patronid, true);
 
                         if (patron != null) {
 
@@ -795,7 +795,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "items": {
 
-                        DocumentList documentList = integratedLibrarySystem.items(patronid, "all");
+                        DocumentList documentList = libraryManagementSystem.items(patronid, "all");
 
                         if (documentList != null) {
                             StringWriter json = new StringWriter();
@@ -884,7 +884,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "items/borrowed": {
 
-                        DocumentList documentList = integratedLibrarySystem.items(patronid, "borrowed");
+                        DocumentList documentList = libraryManagementSystem.items(patronid, "borrowed");
 
                         if (documentList != null) {
                             StringWriter json = new StringWriter();
@@ -973,7 +973,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "items/borrowed/ill": {
 
-                        DocumentList documentList = integratedLibrarySystem.items(patronid, "borrowed", "ill");
+                        DocumentList documentList = libraryManagementSystem.items(patronid, "borrowed", "ill");
 
                         if (documentList != null) {
                             StringWriter json = new StringWriter();
@@ -1062,7 +1062,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "items/borrowed/renewed": {
 
-                        DocumentList documentList = integratedLibrarySystem.items(patronid, "borrowed", "renewed");
+                        DocumentList documentList = libraryManagementSystem.items(patronid, "borrowed", "renewed");
 
                         if (documentList != null) {
                             StringWriter json = new StringWriter();
@@ -1151,7 +1151,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "items/borrowed/recalled": {
 
-                        DocumentList documentList = integratedLibrarySystem.items(patronid, "borrowed", "recalled");
+                        DocumentList documentList = libraryManagementSystem.items(patronid, "borrowed", "recalled");
 
                         if (documentList != null) {
                             StringWriter json = new StringWriter();
@@ -1240,7 +1240,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "items/ordered": {
 
-                        DocumentList documentList = integratedLibrarySystem.items(patronid, "ordered");
+                        DocumentList documentList = libraryManagementSystem.items(patronid, "ordered");
 
                         if (documentList != null) {
                             StringWriter json = new StringWriter();
@@ -1329,7 +1329,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "items/reserved": {
 
-                        DocumentList documentList = integratedLibrarySystem.items(patronid, "reserved");
+                        DocumentList documentList = libraryManagementSystem.items(patronid, "reserved");
 
                         if (documentList != null) {
                             StringWriter json = new StringWriter();
@@ -1418,7 +1418,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "request": {
 
-                        DocumentList documentList = integratedLibrarySystem.request(patronid, documents);
+                        DocumentList documentList = libraryManagementSystem.request(patronid, documents);
 
                         if (documentList != null) {
 
@@ -1524,7 +1524,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "renew": {
 
-                        DocumentList documentList = integratedLibrarySystem.renew(patronid, documents);
+                        DocumentList documentList = libraryManagementSystem.renew(patronid, documents);
 
                         if (documentList != null) {
 
@@ -1621,7 +1621,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "cancel": {
 
-                        DocumentList documentList = integratedLibrarySystem.cancel(patronid, documents);
+                        DocumentList documentList = libraryManagementSystem.cancel(patronid, documents);
 
                         if (documentList != null) {
 
@@ -1718,7 +1718,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "fees": {
 
-                        FeeList feeList = integratedLibrarySystem.fees(patronid);
+                        FeeList feeList = libraryManagementSystem.fees(patronid);
 
                         if (feeList != null) {
                             StringWriter json = new StringWriter();
@@ -1807,7 +1807,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                 }
             }
-            catch (ILSException e) {
+            catch (LibraryManagementSystemException e) {
 
                 StringWriter json = new StringWriter();
 

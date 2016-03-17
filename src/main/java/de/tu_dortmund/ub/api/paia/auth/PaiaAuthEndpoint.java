@@ -355,42 +355,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 // if access_token not equals "" >> delete token + new login
                 if (!access_token.equals("")) {
 
-                    CloseableHttpClient httpclient = HttpClients.createDefault();
-
-                    String tokenRequestBody = "{ \"access_token\"=\"" + access_token + "\","
-                            + "\"client_id\"=\"" + this.config.getProperty("service.oauth20.client_id") + "\","
-                            + "\"client_secret\"=\"" + this.config.getProperty("service.oauth20.client_secret") + "\""
-                            + "}";
-
-                    HttpPost httpPost = new HttpPost(this.config.getProperty("service.oauth20.tokenendpoint") + "/revoke");
-                    StringEntity stringEntity = new StringEntity(tokenRequestBody, ContentType.create("application/json", Consts.UTF_8));
-                    httpPost.setEntity(stringEntity);
-
-                    CloseableHttpResponse httpResponse = httpclient.execute(httpPost);
-
-                    try {
-
-                        int statusCode = httpResponse.getStatusLine().getStatusCode();
-                        HttpEntity httpEntity = httpResponse.getEntity();
-
-                        switch (statusCode) {
-
-                            case 200: {
-
-                                this.logger.info("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode);
-
-                                break;
-                            }
-                            default: {
-
-                                this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode);
-                            }
-                        }
-
-                        EntityUtils.consume(httpEntity);
-                    } finally {
-                        httpResponse.close();
-                    }
+                    // TODO AuthorizationInterface.revokeToken()
 
                     // delete cookie
                     Cookie cookie = new Cookie("PaiaService", null);
@@ -401,9 +366,11 @@ public class PaiaAuthEndpoint extends HttpServlet {
                     cookie.setPath("/");
                     httpServletResponse.addCookie(cookie);
 
+                    // cleanup variable
                     access_token = "";
                 }
 
+                // analyse on request data
                 LoginRequest loginRequest = null;
                 try {
 
@@ -468,9 +435,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
                     }
                 }
 
+                // do login
                 if (loginRequest != null && loginRequest.getUsername() != null && loginRequest.getPassword() != null && loginRequest.getGrant_type() != null && loginRequest.getGrant_type().equals("password")) {
-
-                    LoginResponse loginResponse = null;
 
                     String scope = "read_patron read_fees read_items write_items"; // TODO config-properties
                     if (loginRequest.getScope() != null && !loginRequest.getScope().equals("")) {
@@ -478,63 +444,12 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         scope = loginRequest.getScope();
                     }
 
-                    // HTTP POST /oauth20/tokens
-                    CloseableHttpClient httpclient = HttpClients.createDefault();
+                    // TODO AuthorizationInterface.getToken()
+                    String responseJson = "";
 
-                    try {
-                        String tokenRequestBody = "grant_type=password&username=" + loginRequest.getUsername()
-                                + "&password=" + loginRequest.getPassword()
-                                + "&scope=" + scope
-                                + "&client_id=" + this.config.getProperty("service.oauth20.client_id")
-                                + "&client_secret=" + this.config.getProperty("service.oauth20.client_secret");
+                    if (!responseJson.equals("")) {
 
-                        HttpPost httpPost = new HttpPost(this.config.getProperty("service.oauth20.tokenendpoint"));
-                        StringEntity stringEntity = new StringEntity(tokenRequestBody, ContentType.create("application/x-www-form-urlencoded", Consts.UTF_8));
-                        httpPost.setEntity(stringEntity);
-
-                        this.logger.info("[" + this.config.getProperty("service.name") + "] " + "request : " + httpPost.getRequestLine());
-
-                        CloseableHttpResponse httpResponse = httpclient.execute(httpPost);
-
-                        try {
-
-                            int statusCode = httpResponse.getStatusLine().getStatusCode();
-                            HttpEntity httpEntity = httpResponse.getEntity();
-
-                            switch (statusCode) {
-
-                                case 200: {
-
-                                    this.logger.info("[" + this.config.getProperty("service.name") + "] " + statusCode + " : " + httpResponse.getStatusLine().getReasonPhrase());
-
-                                    StringWriter writer = new StringWriter();
-                                    IOUtils.copy(httpEntity.getContent(), writer, "UTF-8");
-                                    String responseJson = writer.toString();
-
-                                    this.logger.info("[" + this.config.getProperty("service.name") + "] responseJson : " + responseJson);
-
-                                    loginResponse = mapper.readValue(responseJson, LoginResponse.class);
-
-                                    break;
-                                }
-                                default: {
-
-                                    this.logger.error("[" + this.config.getProperty("service.name") + "] " + statusCode + " : " + httpResponse.getStatusLine().getReasonPhrase());
-
-                                }
-                            }
-
-                            EntityUtils.consume(httpEntity);
-                        }
-                        finally {
-                            httpResponse.close();
-                        }
-                    }
-                    finally {
-                        httpclient.close();
-                    }
-
-                    if (loginResponse != null) {
+                        LoginResponse loginResponse = mapper.readValue(responseJson, LoginResponse.class);
 
                         // anpassen des loginResponse
                         loginResponse.setRefresh_token(null);
@@ -725,41 +640,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 CloseableHttpClient httpclient = HttpClients.createDefault();
 
                 if (!access_token.equals("")) {
-                    String tokenRequestBody = "{ \"access_token\"=\"" + access_token + "\","
-                            + "\"client_id\"=\"" + this.config.getProperty("service.oauth20.client_id") + "\","
-                            + "\"client_secret\"=\"" + this.config.getProperty("service.oauth20.client_secret") + "\""
-                            + "}";
 
-                    HttpPost httpPost = new HttpPost(this.config.getProperty("service.oauth20.tokenendpoint") + "/revoke");
-                    StringEntity stringEntity = new StringEntity(tokenRequestBody, ContentType.create("application/json", Consts.UTF_8));
-                    httpPost.setEntity(stringEntity);
-
-                    CloseableHttpResponse httpResponse = httpclient.execute(httpPost);
-
-                    try {
-
-                        int statusCode = httpResponse.getStatusLine().getStatusCode();
-                        HttpEntity httpEntity = httpResponse.getEntity();
-
-                        switch (statusCode) {
-
-                            case 200: {
-
-                                this.logger.info("[" + this.config.getProperty("service.name") + "] " + "SUCCESS logout(): HTTP STATUS = " + statusCode);
-
-                                break;
-                            }
-                            default: {
-
-                                this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode);
-                            }
-                        }
-
-                        EntityUtils.consume(httpEntity);
-                    }
-                    finally {
-                        httpResponse.close();
-                    }
+                    // TODO AuthorizationInterface.revokeToken()
                 }
 
                 httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
@@ -811,7 +693,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                     changeRequest = mapper.readValue(requestBody, ChangeRequest.class);
 
-                    // PAIA.patron
+                    // exists patron? using PAIA.core.patron()
                     CloseableHttpClient httpclient = HttpClients.createDefault();
 
                     String url = "http://" + httpServletRequest.getHeader("Host") + "/" + this.config.getProperty("service.endpoint.core") + "/" + changeRequest.getPatron() + "/patron";
@@ -838,51 +720,15 @@ public class PaiaAuthEndpoint extends HttpServlet {
                                 IOUtils.copy(httpEntity.getContent(), writer, "UTF-8");
                                 Patron patron = mapper.readValue(writer.toString(), Patron.class);
 
-                                // changePassword via PAAA.update
-                                String requestBodyString = "{ \"account\" : \"" + patron.getAccount() + "\", \"opacpin\" : \"" + changeRequest.getNewPassword() + "\"}";
+                                // TODO LibraryManagementSystem.changePassword()
 
-                                String paaa = this.config.getProperty("paaa.core.endpoint") + "/" + patron.getUsername() + "/updatepatron";
-                                this.logger.info("PAAA-URL: " + paaa);
-
-                                HttpPost httpPost = new HttpPost(paaa);
-                                httpPost.addHeader("Authorization","Bearer " + this.config.getProperty("paaa.api.key"));
-                                httpPost.addHeader("Accept","application/json");
-
-                                StringEntity stringEntity = new StringEntity(requestBodyString, ContentType.create("application/json", Consts.UTF_8));
-                                httpPost.setEntity(stringEntity);
-
-                                CloseableHttpResponse httpResponse1 = httpclient.execute(httpPost);
-
-                                try {
-
-                                    int statusCode1 = httpResponse1.getStatusLine().getStatusCode();
-                                    HttpEntity httpEntity1 = httpResponse1.getEntity();
-
-                                    switch (statusCode1) {
-
-                                        case 200: {
-
-                                            this.logger.info("[" + this.config.getProperty("service.name") + "] " + "SUCCESS logout(): HTTP STATUS = " + statusCode1);
-
-                                            break;
-                                        }
-                                        default: {
-
-                                            this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode1);
-                                            throw new Exception("ERROR in PAAA.updatepatron.");
-                                        }
-                                    }
-
-                                    EntityUtils.consume(httpEntity1);
-                                }
-                                finally {
-                                    httpResponse.close();
-                                }
+                                // TODO What's the response in this case?
 
                                 break;
                             }
                             default: {
 
+                                // TODO What's happening in this case?
                                 this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode);
                             }
                         }
@@ -927,14 +773,15 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                     newPasswordRequest = mapper.readValue(requestBody, NewPasswordRequest.class);
 
-                    // PAIA.patron
+                    // exists patron? using PAIA.core.patron() with API-Key!
                     CloseableHttpClient httpclient = HttpClients.createDefault();
 
                     String url = "http://" + httpServletRequest.getHeader("Host") + "/" + this.config.getProperty("service.endpoint.core") + "/" + newPasswordRequest.getPatron() + "/fullpatron";
                     this.logger.info("PAIA.core-URL: " + url);
 
                     HttpGet httpGet = new HttpGet(url);
-                    httpGet.addHeader("Authorization", "Bearer " + "267db2ba-7a0f-4fdd-b553-a810fdca8348");
+                    // TODO API-KEY to/from Properties!
+                    httpGet.addHeader("Authorization", "Bearer " + "");
                     httpGet.addHeader("Accept", "application/json");
 
                     CloseableHttpResponse httpResponse = httpclient.execute(httpGet);
@@ -954,57 +801,15 @@ public class PaiaAuthEndpoint extends HttpServlet {
                                 IOUtils.copy(httpEntity.getContent(), writer, "UTF-8");
                                 Patron patron = mapper.readValue(writer.toString(), Patron.class);
 
-                                // changePassword via PAAA.update
-                                String tmp[] = patron.getDateofbirth().split("\\.");
-                                String newPassword = tmp[0] + tmp[1] + tmp[2].substring(2);
+                                // TODO LibraryManagementSystem.renewPassword()
 
-                                String requestBodyString = "{ \"account\" : \"" + patron.getAccount() + "\", \"opacpin\" : \"" + newPassword + "\"}";
-
-                                String paaa = this.config.getProperty("paaa.core.endpoint") + "/" + patron.getUsername() + "/updatepatron";
-                                this.logger.info("PAAA-URL: " + paaa);
-
-                                HttpPost httpPost = new HttpPost(paaa);
-                                httpPost.addHeader("Authorization","Bearer " + this.config.getProperty("paaa.api.key"));
-                                httpPost.addHeader("Accept","application/json");
-
-                                StringEntity stringEntity = new StringEntity(requestBodyString, ContentType.create("application/json", Consts.UTF_8));
-                                httpPost.setEntity(stringEntity);
-
-                                CloseableHttpResponse httpResponse1 = httpclient.execute(httpPost);
-
-                                try {
-
-                                    int statusCode1 = httpResponse1.getStatusLine().getStatusCode();
-                                    HttpEntity httpEntity1 = httpResponse1.getEntity();
-
-                                    switch (statusCode1) {
-
-                                        case 200: {
-
-                                            this.logger.info("[" + this.config.getProperty("service.name") + "] " + "SUCCESS logout(): HTTP STATUS = " + statusCode1);
-
-                                            // TODO E-Mail to user
-                                            this.logger.info("Password resetted. Mail send.");
-
-                                            break;
-                                        }
-                                        default: {
-
-                                            this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode1);
-                                            throw new Exception("ERROR in PAAA.updatepatron.");
-                                        }
-                                    }
-
-                                    EntityUtils.consume(httpEntity1);
-                                }
-                                finally {
-                                    httpResponse.close();
-                                }
+                                // TODO What's the response in this case?
 
                                 break;
                             }
                             default: {
 
+                                // TODO What's happening in this case?
                                 this.logger.error("[" + this.config.getProperty("service.name") + "] " + "ERROR in logout(): HTTP STATUS = " + statusCode);
                             }
                         }

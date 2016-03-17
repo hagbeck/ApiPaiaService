@@ -4,7 +4,7 @@
 
     <groupId>de.tu_dortmund.ub.api.paia</groupId>
     <artifactId>PaiaService</artifactId>
-    <version>0.9-SNAPSHOT</version>
+    <version>0.9.1-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>PaiaService</name>
@@ -28,6 +28,8 @@
         <dependency.version.apache.commons.httpclient>4.5</dependency.version.apache.commons.httpclient>
         <dependency.version.apache.commons.httpcore>4.4.1</dependency.version.apache.commons.httpcore>
         <dependency.version.apache.commons.httpmime>4.5</dependency.version.apache.commons.httpmime>
+        <dependency.version.javax.json.api>1.0</dependency.version.javax.json.api>
+        <dependency.version.javax.json.impl>1.0.4</dependency.version.javax.json.impl>
     </properties>
 
     <dependencies>
@@ -136,12 +138,12 @@
         <dependency>
             <groupId>javax.json</groupId>
             <artifactId>javax.json-api</artifactId>
-            <version>1.0</version>
+            <version>${dependency.version.javax.json.api}</version>
         </dependency>
         <dependency>
             <groupId>org.glassfish</groupId>
             <artifactId>javax.json</artifactId>
-            <version>1.0.4</version>
+            <version>${dependency.version.javax.json.impl}</version>
         </dependency>
 
     </dependencies>
@@ -151,7 +153,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-shade-plugin</artifactId>
-                <version>2.3</version>
+                <version>${dependency.version.maven.shade}</version>
                 <executions>
                     <execution>
                         <phase>package</phase>

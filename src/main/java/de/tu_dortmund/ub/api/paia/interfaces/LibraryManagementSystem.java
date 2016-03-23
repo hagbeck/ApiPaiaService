@@ -60,5 +60,5 @@ public interface LibraryManagementSystem {
 
     boolean changePassword(ChangeRequest changeRequest) throws LibraryManagementSystemException;
 
-    boolean renewPassword(NewPasswordRequest newPasswordRequest) throws LibraryManagementSystemException;
+    boolean renewPassword(NewPasswordRequest newPasswordRequest, Patron patron) throws LibraryManagementSystemException;
 }

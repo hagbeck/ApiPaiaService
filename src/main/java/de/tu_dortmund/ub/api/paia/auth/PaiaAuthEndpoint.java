@@ -27,6 +27,7 @@ package de.tu_dortmund.ub.api.paia.auth;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.tu_dortmund.ub.api.paia.auth.model.ChangeRequest;
 import de.tu_dortmund.ub.api.paia.auth.model.NewPasswordRequest;
+import de.tu_dortmund.ub.api.paia.core.model.DocumentList;
 import de.tu_dortmund.ub.api.paia.core.model.FeeList;
 import de.tu_dortmund.ub.api.paia.core.model.Patron;
 import de.tu_dortmund.ub.api.paia.interfaces.AuthorizationException;
@@ -37,6 +38,7 @@ import de.tu_dortmund.ub.api.paia.model.RequestError;
 import de.tu_dortmund.ub.api.paia.auth.model.LoginRequest;
 import de.tu_dortmund.ub.api.paia.auth.model.LoginResponse;
 import de.tu_dortmund.ub.util.impl.Lookup;
+import de.tu_dortmund.ub.util.impl.Mailer;
 import de.tu_dortmund.ub.util.output.ObjectToHtmlTransformation;
 import de.tu_dortmund.ub.util.output.TransformationException;
 import org.apache.commons.io.IOUtils;
@@ -54,6 +56,7 @@ import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import org.jdom2.Document;
 
+import javax.mail.MessagingException;
 import javax.mail.internet.InternetAddress;
 import javax.servlet.ServletException;
 import javax.servlet.http.Cookie;
@@ -146,10 +149,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
         this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "PathInfo = " + httpServletRequest.getPathInfo());
         this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "QueryString = " + httpServletRequest.getQueryString());
 
-        String patronid = "";
         String service = "";
-        String accept = "";
-        String access_token = "";
         String authorization = "";
 
         String path = httpServletRequest.getPathInfo();
@@ -189,13 +189,6 @@ public class PaiaAuthEndpoint extends HttpServlet {
             }
             if (headerNameKey.equals("Authorization")) {
                 authorization = httpServletRequest.getHeader( headerNameKey );
-                String[] tmp = authorization.split(" ");
-                if (tmp.length > 1) {
-                    access_token = tmp[1];
-                }
-                else {
-                    access_token= tmp[0];
-                }
             }
         }
 
@@ -262,12 +255,12 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
             this.logger.info("language = " + language);
 
-            if (access_token.equals("") && httpServletRequest.getParameter("access_token") != null) {
+            if (authorization.equals("") && httpServletRequest.getParameter("access_token") != null) {
 
-                access_token = httpServletRequest.getParameter("access_token");
+                authorization = httpServletRequest.getParameter("access_token");
             }
 
-            if (access_token.equals("")) {
+            if (authorization.equals("")) {
 
                 // if exists PaiaService-Cookie: read content
                 Cookie[] cookies = httpServletRequest.getCookies();
@@ -280,7 +273,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                             this.logger.info(value);
                             LoginResponse loginResponse = mapper.readValue(value, LoginResponse.class);
 
-                            access_token = loginResponse.getAccess_token();
+                            authorization = loginResponse.getAccess_token();
 
                             break;
                         }
@@ -288,7 +281,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 }
             }
 
-            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "Access_token: " + access_token);
+            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "Access_token: " + authorization);
 
             StringBuffer jb = new StringBuffer();
             String line = null;
@@ -308,7 +301,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
             // 2. Schritt: Service
             if (service.equals("login") || service.equals("logout") || service.equals("change") || service.equals("renew")) {
 
-                this.provideService(httpServletRequest, httpServletResponse, service, access_token, requestBody, format, language, redirect_url);
+                this.provideService(httpServletRequest, httpServletResponse, service, authorization, requestBody, format, language, redirect_url);
             }
             else {
 
@@ -775,6 +768,201 @@ public class PaiaAuthEndpoint extends HttpServlet {
             }
             case "change": {
 
+                // build ChangeRequest object
+                ChangeRequest changeRequest = mapper.readValue(requestBody, ChangeRequest.class);
+
+                // check token ...
+                boolean isAuthorized = false;
+
+                if (access_token != null && !access_token.equals("")) {
+
+                    if (Lookup.lookupAll(AuthorizationInterface.class).size() > 0) {
+
+                        AuthorizationInterface authorizationInterface = Lookup.lookup(AuthorizationInterface.class);
+                        // init Authorization Service
+                        authorizationInterface.init(this.config);
+
+                        try {
+
+                            isAuthorized = authorizationInterface.isTokenValid(httpServletResponse, service, changeRequest.getPatron(), access_token);
+                        }
+                        catch (AuthorizationException e) {
+
+                            // TODO correct error handling
+                            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + "!");
+                        }
+                    }
+                    else {
+
+                        // TODO correct error handling
+                        this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": " + "Authorization Interface not implemented!");
+                    }
+                }
+
+                this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + access_token + " - " + isAuthorized);
+
+                if (!isAuthorized) {
+
+                    // Authorization
+                    this.authorize(httpServletRequest, httpServletResponse, format);
+                }
+                else {
+
+
+                    if (Lookup.lookupAll(LibraryManagementSystem.class).size() > 0) {
+
+                        LibraryManagementSystem libraryManagementSystem = Lookup.lookup(LibraryManagementSystem.class);
+                        // init ILS
+                        libraryManagementSystem.init(this.config);
+
+                        // exists patron?
+                        // use LibraryManagementSystem.patron(): failed = Exception!
+                        try {
+
+                            Patron patron = libraryManagementSystem.patron(changeRequest.getPatron(), false);
+
+                            boolean isChanged = libraryManagementSystem.changePassword(changeRequest);
+
+                            if (isChanged) {
+
+
+                                // E-Mail to user
+                                Mailer mailer = new Mailer(this.config.getProperty("service.mailer.conf"));
+
+                                try {
+
+                                    // TODO patron.getEMail()
+                                    mailer.postMail(this.config.getProperty("service.mailer.change.subject"), this.config.getProperty("service.mailer.change.message"));
+
+                                } catch (MessagingException e1) {
+
+                                    this.logger.error(e1.getMessage(), e1.getCause());
+                                }
+
+                                this.logger.info("Password changed. Mail send to '" + patron.getEmail() + "'.");
+
+                                // 200 OK
+                                if (format.equals("html")) {
+
+                                    format = "json"; // TODO or what else?
+                                }
+
+                                Patron responsePatron = new Patron();
+                                responsePatron.setUsername(patron.getUsername());
+                                responsePatron.setStatus(patron.getStatus());
+                                responsePatron.setEmail(new InternetAddress(patron.getEmail()));
+
+                                if (format.equals("json")) {
+
+                                    httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                    mapper.writeValue(httpServletResponse.getWriter(), responsePatron);
+                                }
+
+                                if (format.equals("xml")) {
+
+                                    JAXBContext context = JAXBContext.newInstance(Patron.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                                    m.marshal(responsePatron, httpServletResponse.getWriter());
+                                }
+                            } else {
+
+                                // 401 UNAUTHORIZED
+                                this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + ": Wrong old password!");
+
+                                // Error handling mit suppress_response_codes=true
+                                if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                }
+                                // Error handling mit suppress_response_codes=false (=default)
+                                else {
+                                    httpServletResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                                }
+
+                                // Json für Response body
+                                RequestError requestError = new RequestError();
+                                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED)));
+                                requestError.setCode(HttpServletResponse.SC_UNAUTHORIZED);
+                                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".description"));
+                                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".uri"));
+
+                                this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
+                            }
+                        } catch (LibraryManagementSystemException e) {
+
+                            // 401 UNAUTHORIZED
+                            this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + ": " + e.getMessage());
+
+                            // Error handling mit suppress_response_codes=true
+                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            }
+                            // Error handling mit suppress_response_codes=false (=default)
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            }
+
+                            // Json für Response body
+                            RequestError requestError = new RequestError();
+                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED)));
+                            requestError.setCode(HttpServletResponse.SC_UNAUTHORIZED);
+                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".description"));
+                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".uri"));
+
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
+                        } catch (Exception e) {
+
+                            this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Config Error!");
+
+                            // Error handling mit suppress_response_codes=true
+                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            }
+                            // Error handling mit suppress_response_codes=false (=default)
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                            }
+
+                            // Json für Response body
+                            RequestError requestError = new RequestError();
+                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR)));
+                            requestError.setCode(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR) + ".description"));
+                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR) + ".uri"));
+
+                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
+                        }
+                    } else {
+
+                        this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Config Error!");
+
+                        // Error handling mit suppress_response_codes=true
+                        if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                        }
+                        // Error handling mit suppress_response_codes=false (=default)
+                        else {
+                            httpServletResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                        }
+
+                        // Json für Response body
+                        RequestError requestError = new RequestError();
+                        requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR)));
+                        requestError.setCode(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
+                        requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR) + ".description"));
+                        requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR) + ".uri"));
+
+                        this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
+                    }
+                }
+
+                break;
+            }
+            case "renew": {
+
                 if (Lookup.lookupAll(LibraryManagementSystem.class).size() > 0) {
 
                     LibraryManagementSystem libraryManagementSystem = Lookup.lookup(LibraryManagementSystem.class);
@@ -785,14 +973,29 @@ public class PaiaAuthEndpoint extends HttpServlet {
                     // use LibraryManagementSystem.patron(): failed = Exception!
                     try {
 
-                        // build ChangeRequest object
-                        ChangeRequest changeRequest = mapper.readValue(requestBody, ChangeRequest.class);
+                        // build NewPasswordRequest object
+                        NewPasswordRequest newPasswordRequest = mapper.readValue(requestBody, NewPasswordRequest.class);
 
-                        Patron patron = libraryManagementSystem.patron(changeRequest.getPatron(), false);
+                        Patron patron = libraryManagementSystem.patron(newPasswordRequest.getPatron(), true);
 
-                        boolean isChanged = libraryManagementSystem.changePassword(changeRequest);
+                        boolean isRenewed = libraryManagementSystem.renewPassword(newPasswordRequest, patron);
 
-                        if (isChanged) {
+                        if (isRenewed) {
+
+                            // E-Mail to user
+                            Mailer mailer = new Mailer(this.config.getProperty("service.mailer.conf"));
+
+                            try {
+
+                                // TODO patron.getEMail()
+                                mailer.postMail(this.config.getProperty("service.mailer.renew.subject"), this.config.getProperty("service.mailer.renew.message"));
+
+                            } catch (MessagingException e1) {
+
+                                this.logger.error(e1.getMessage(), e1.getCause());
+                            }
+
+                            this.logger.info("Password resetted. Mail send to '" + patron.getEmail() + "'.");
 
                             // 200 OK
                             if (format.equals("html")) {
@@ -824,119 +1027,6 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         }
                         else {
 
-                            // 401 UNAUTHORIZED
-                            this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + ": Wrong old password!");
-
-                            // Error handling mit suppress_response_codes=true
-                            if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                            }
-                            // Error handling mit suppress_response_codes=false (=default)
-                            else {
-                                httpServletResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                            }
-
-                            // Json für Response body
-                            RequestError requestError = new RequestError();
-                            requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED)));
-                            requestError.setCode(HttpServletResponse.SC_UNAUTHORIZED);
-                            requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".description"));
-                            requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".uri"));
-
-                            this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
-                        }
-                    }
-                    catch (LibraryManagementSystemException e) {
-
-                        // 401 UNAUTHORIZED
-                        this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + ": " + e.getMessage());
-
-                        // Error handling mit suppress_response_codes=true
-                        if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                        }
-                        // Error handling mit suppress_response_codes=false (=default)
-                        else {
-                            httpServletResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-                        }
-
-                        // Json für Response body
-                        RequestError requestError = new RequestError();
-                        requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED)));
-                        requestError.setCode(HttpServletResponse.SC_UNAUTHORIZED);
-                        requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".description"));
-                        requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".uri"));
-
-                        this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
-                    }
-                    catch (Exception e) {
-
-                        this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Config Error!");
-
-                        // Error handling mit suppress_response_codes=true
-                        if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                        }
-                        // Error handling mit suppress_response_codes=false (=default)
-                        else {
-                            httpServletResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                        }
-
-                        // Json für Response body
-                        RequestError requestError = new RequestError();
-                        requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR)));
-                        requestError.setCode(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                        requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR) + ".description"));
-                        requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR) + ".uri"));
-
-                        this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
-                    }
-                }
-                else {
-
-                    this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Config Error!");
-
-                    // Error handling mit suppress_response_codes=true
-                    if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                        httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                    }
-                    // Error handling mit suppress_response_codes=false (=default)
-                    else {
-                        httpServletResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                    }
-
-                    // Json für Response body
-                    RequestError requestError = new RequestError();
-                    requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR)));
-                    requestError.setCode(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                    requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR) + ".description"));
-                    requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR) + ".uri"));
-
-                    this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
-                }
-
-                break;
-            }
-            case "renew": {
-
-                if (Lookup.lookupAll(LibraryManagementSystem.class).size() > 0) {
-
-                    LibraryManagementSystem libraryManagementSystem = Lookup.lookup(LibraryManagementSystem.class);
-                    // init ILS
-                    libraryManagementSystem.init(this.config);
-
-                    // exists patron?
-                    // use LibraryManagementSystem.patron(): failed = Exception!
-                    try {
-
-                        // build NewPasswordRequest object
-                        NewPasswordRequest newPasswordRequest = mapper.readValue(requestBody, NewPasswordRequest.class);
-
-                        Patron patron = libraryManagementSystem.patron(newPasswordRequest.getPatron(), true);
-
-                        // TODO too local!!!!!!!!!!!!!!!!!!
-                        if (patron.getUsergroup().equals("30")) {
-
                             // 401 SC_UNAUTHORIZED
                             this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + ": Wrong usergroup!");
 
@@ -957,67 +1047,6 @@ public class PaiaAuthEndpoint extends HttpServlet {
                             requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".uri"));
 
                             this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
-                        }
-                        else {
-
-                            boolean isRenewed = libraryManagementSystem.renewPassword(newPasswordRequest, patron);
-
-                            if (isRenewed) {
-
-                                // TODO E-Mail to user
-                                this.logger.info("Password resetted. Mail send.");
-
-                                // 200 OK
-                                if (format.equals("html")) {
-
-                                    format = "json"; // TODO or what else?
-                                }
-
-                                Patron responsePatron = new Patron();
-                                responsePatron.setUsername(patron.getUsername());
-                                responsePatron.setStatus(patron.getStatus());
-                                responsePatron.setEmail(new InternetAddress(patron.getEmail()));
-
-                                if (format.equals("json")) {
-
-                                    httpServletResponse.setContentType("application/json;charset=UTF-8");
-                                    mapper.writeValue(httpServletResponse.getWriter(), responsePatron);
-                                }
-
-                                if (format.equals("xml")) {
-
-                                    JAXBContext context = JAXBContext.newInstance(Patron.class);
-                                    Marshaller m = context.createMarshaller();
-                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                    // Write to HttpResponse
-                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
-                                    m.marshal(responsePatron, httpServletResponse.getWriter());
-                                }
-                            }
-                            else {
-
-                                // 500 SC_INTERNAL_SERVER_ERROR
-                                this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Pssword not resetted!");
-
-                                // Error handling mit suppress_response_codes=true
-                                if (httpServletRequest.getParameter("suppress_response_codes") != null) {
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
-                                }
-                                // Error handling mit suppress_response_codes=false (=default)
-                                else {
-                                    httpServletResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                                }
-
-                                // Json für Response body
-                                RequestError requestError = new RequestError();
-                                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR)));
-                                requestError.setCode(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR) + ".description"));
-                                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_INTERNAL_SERVER_ERROR) + ".uri"));
-
-                                this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
-                            }
                         }
                     }
                     catch (LibraryManagementSystemException e) {
@@ -1115,6 +1144,80 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                 this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
             }
+        }
+    }
+
+    /**
+     *
+     * @param httpServletRequest
+     * @param httpServletResponse
+     * @throws IOException
+     */
+    private void authorize(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String format) throws IOException {
+
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
+
+        ObjectMapper mapper = new ObjectMapper();
+
+        // Error handling mit suppress_response_codes=true
+        if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+        }
+        // Error handling mit suppress_response_codes=false (=default)
+        else {
+            httpServletResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        }
+
+        // Json für Response body
+        RequestError requestError = new RequestError();
+        requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED)));
+        requestError.setCode(HttpServletResponse.SC_UNAUTHORIZED);
+        requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".description"));
+        requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".uri"));
+
+        // XML-Ausgabe mit JAXB
+        if (format.equals("xml")) {
+
+            try {
+
+                JAXBContext context = JAXBContext.newInstance(RequestError.class);
+                Marshaller m = context.createMarshaller();
+                m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                // Write to HttpResponse
+                httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                m.marshal(requestError, httpServletResponse.getWriter());
+
+            } catch (JAXBException e) {
+                this.logger.error(e.getMessage(), e.getCause());
+                httpServletResponse.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Internal Server Error: Error while rendering the results.");
+            }
+        }
+
+        // JSON-Ausgabe mit Jackson
+        if (format.equals("json")) {
+
+            httpServletResponse.setContentType("application/json;charset=UTF-8");
+            mapper.writeValue(httpServletResponse.getWriter(), requestError);
+        }
+
+        // html > redirect zu "PAIA auth - login" mit redirect_url = "PAIA auth - service"
+        if (format.equals("html")) {
+
+            httpServletResponse.setContentType("text/html;charset=UTF-8");
+
+            String redirect_url = this.config.getProperty("service.base_url") + this.config.getProperty("service.endpoint.auth") + httpServletRequest.getPathInfo();
+            if (httpServletRequest.getQueryString() != null && !httpServletRequest.getQueryString().equals("")) {
+                redirect_url += "?" + httpServletRequest.getQueryString();
+            }
+            this.logger.info("redirect_url = " + redirect_url);
+
+            //String login_url = "http://" + httpServletRequest.getServerName() + ":" + httpServletRequest.getServerPort() + this.config.getProperty("service.endpoint.auth") + "/login?redirect_url=" + redirect_url;
+            String login_url = this.config.getProperty("service.base_url") + this.config.getProperty("service.endpoint.auth") + "/login?redirect_url=" + redirect_url;
+            this.logger.info("login_url = " + login_url);
+
+            httpServletResponse.sendRedirect(login_url);
         }
     }
 

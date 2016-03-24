@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2015-2016, Hans-Georg Becker
+Copyright (c) 2015-2016, Hans-Georg Becker, http://orcid.org/0000-0003-0432-294X
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -113,9 +113,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
         // init logger
         PropertyConfigurator.configure(this.config.getProperty("service.log4j-conf"));
 
-        this.logger.info("[" + this.config.getProperty("service.name") + "] " + "Starting 'PAIA Core Endpoint' ...");
-        this.logger.info("[" + this.config.getProperty("service.name") + "] " + "conf-file = " + conffile);
-        this.logger.info("[" + this.config.getProperty("service.name") + "] " + "log4j-conf-file = " + this.config.getProperty("service.log4j-conf"));
+        this.logger.info("Starting 'PAIA Core Endpoint' ...");
+        this.logger.info("conf-file = " + conffile);
+        this.logger.info("log4j-conf-file = " + this.config.getProperty("service.log4j-conf"));
     }
 
     /**
@@ -145,8 +145,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
         String language;
         String redirect_url;
 
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "PathInfo = " + httpServletRequest.getPathInfo());
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "QueryString = " + httpServletRequest.getQueryString());
+        this.logger.debug("PathInfo = " + httpServletRequest.getPathInfo());
+        this.logger.debug("QueryString = " + httpServletRequest.getQueryString());
 
         String patronid = "";
         String service = "";
@@ -182,8 +182,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
             patronid = "";
         }
 
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Service: " + service);
-        this.logger.debug("[" + config.getProperty("service.name") + "] " + "Patron: " + patronid);
+        this.logger.debug("Service: " + service);
+        this.logger.debug("Patron: " + patronid);
 
         format = "html";
 
@@ -218,7 +218,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
         if (format.equals("html") && Lookup.lookupAll(ObjectToHtmlTransformation.class).size() == 0) {
 
-            this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_BAD_REQUEST + ": " + "html not implemented!");
+            this.logger.error(HttpServletResponse.SC_BAD_REQUEST + ": " + "html not implemented!");
 
             // Error handling mit suppress_response_codes=true
             if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -347,15 +347,15 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     while (headerNames.hasMoreElements()) {
 
                         String headerNameKey = (String) headerNames.nextElement();
-                        this.logger.debug("[" + config.getProperty("service.name") + "] " + "headerNameKey = " + headerNameKey + " / headerNameValue = " + httpServletRequest.getHeader(headerNameKey));
+                        this.logger.debug("headerNameKey = " + headerNameKey + " / headerNameValue = " + httpServletRequest.getHeader(headerNameKey));
 
                         if (headerNameKey.equals("Accept-Language")) {
                             language = httpServletRequest.getHeader(headerNameKey);
-                            this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept-Language: " + language);
+                            this.logger.debug("Accept-Language: " + language);
                         }
                         if (headerNameKey.equals("Accept")) {
                             accept = httpServletRequest.getHeader(headerNameKey);
-                            this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept: " + accept);
+                            this.logger.debug("Accept: " + accept);
                         }
                         if (headerNameKey.equals("Authorization")) {
                             authorization = httpServletRequest.getHeader(headerNameKey);
@@ -417,17 +417,17 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                     catch (AuthorizationException e) {
 
                                         // TODO correct error handling
-                                        this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + "!");
+                                        this.logger.error(HttpServletResponse.SC_UNAUTHORIZED + "!");
                                     }
 
-                                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization);
+                                    this.logger.debug("Authorization: " + authorization);
                                 }
                             }
                         }
                     }
 
-                    httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
-                    httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
+                    httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
+                    httpServletResponse.setHeader("Cache-Control", this.config.getProperty("Cache-Control"));
 
                     // check token ...
                     boolean isAuthorized = false;
@@ -447,17 +447,17 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             catch (AuthorizationException e) {
 
                                 // TODO correct error handling
-                                this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + "!");
+                                this.logger.error(HttpServletResponse.SC_UNAUTHORIZED + "!");
                             }
                         }
                         else {
 
                             // TODO correct error handling
-                            this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": " + "Authorization Interface not implemented!");
+                            this.logger.error(HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": " + "Authorization Interface not implemented!");
                         }
                     }
 
-                    this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + authorization + " - " + isAuthorized);
+                    this.logger.debug("Authorization: " + authorization + " - " + isAuthorized);
 
                     if (isAuthorized) {
 
@@ -472,7 +472,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 }
                 else {
 
-                    this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_METHOD_NOT_ALLOWED + ": " + httpServletRequest.getMethod() + " for '" + service + "' not allowed!");
+                    this.logger.error(HttpServletResponse.SC_METHOD_NOT_ALLOWED + ": " + httpServletRequest.getMethod() + " for '" + service + "' not allowed!");
 
                     // Error handling mit suppress_response_codes=true
                     if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -500,8 +500,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
         httpServletResponse.setHeader("Access-Control-Allow-Methods", this.config.getProperty("Access-Control-Allow-Methods"));
         httpServletResponse.addHeader("Access-Control-Allow-Headers", this.config.getProperty("Access-Control-Allow-Headers"));
         httpServletResponse.setHeader("Accept", this.config.getProperty("Accept"));
-        httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
-        httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Cache-Control", this.config.getProperty("Cache-Control"));
 
         httpServletResponse.getWriter().println();
     }
@@ -514,8 +514,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
      */
     private void authorize(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String format, DocumentList documents) throws IOException {
 
-        httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
-        httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Cache-Control", this.config.getProperty("Cache-Control"));
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -599,8 +599,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
      */
     private void provideService(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, String format, String language, String redirect_url, DocumentList documents) throws IOException {
 
-        httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
-        httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Cache-Control", this.config.getProperty("Cache-Control"));
 
         ObjectMapper mapper = new ObjectMapper();
 
@@ -622,7 +622,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, patron);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_patron");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -712,7 +712,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, patron);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "write_patron");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -801,7 +801,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -890,7 +890,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -979,7 +979,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -1068,7 +1068,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -1157,7 +1157,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -1246,7 +1246,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -1335,7 +1335,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_items");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -1424,7 +1424,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                             StringWriter json = new StringWriter();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             // set Cookie with new value for urlencoded DocumentList-JSON
                             StringWriter stringWriter = new StringWriter();
@@ -1530,7 +1530,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                             StringWriter json = new StringWriter();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             // delete DocumentList cookie
                             Cookie cookie = new Cookie("PaiaServiceDocumentList", null);
@@ -1627,7 +1627,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                             StringWriter json = new StringWriter();
                             mapper.writeValue(json, documentList);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             // delete DocumentList cookie
                             Cookie cookie = new Cookie("PaiaServiceDocumentList", null);
@@ -1724,7 +1724,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             StringWriter json = new StringWriter();
                             mapper = new ObjectMapper();
                             mapper.writeValue(json, feeList);
-                            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + json);
+                            this.logger.debug(json);
 
                             httpServletResponse.setHeader("X-Accepted-OAuth-Scopes", "read_fees");
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
@@ -1814,7 +1814,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 // TODO Frage nach "570-unknown patron" ist nicht gut! Lösung: Welche Typen von ILSExceptions treten auf? Erzeuge für jeden Typ eine eigene Exception!
                 if (e.getMessage().contains("570-unknown patron")) {
 
-                    this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_NOT_FOUND + ": '" + patronid + "'");
+                    this.logger.error(HttpServletResponse.SC_NOT_FOUND + ": '" + patronid + "'");
 
                     // Error handling mit suppress_response_codes=true
                     if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -1836,7 +1836,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 }
                 else {
 
-                    this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_SERVICE_UNAVAILABLE + ": ILS!");
+                    this.logger.error(HttpServletResponse.SC_SERVICE_UNAVAILABLE + ": ILS!");
 
                     // Error handling mit suppress_response_codes=true
                     if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -1864,7 +1864,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
         }
         else {
 
-            this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_SERVICE_UNAVAILABLE + ": Config Error!");
+            this.logger.error(HttpServletResponse.SC_SERVICE_UNAVAILABLE + ": Config Error!");
 
             // Error handling mit suppress_response_codes=true
             if (httpServletRequest.getParameter("suppress_response_codes") != null) {

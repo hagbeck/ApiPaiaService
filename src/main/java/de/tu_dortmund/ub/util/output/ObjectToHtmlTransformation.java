@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2015, Hans-Georg Becker
+Copyright (c) 2015-2016, Hans-Georg Becker, http://orcid.org/0000-0003-0432-294X
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -27,9 +27,6 @@ package de.tu_dortmund.ub.util.output;
 import java.util.HashMap;
 import java.util.Properties;
 
-/**
- * Created by cihabe on 06.05.2015.
- */
 public interface ObjectToHtmlTransformation {
 
     /**

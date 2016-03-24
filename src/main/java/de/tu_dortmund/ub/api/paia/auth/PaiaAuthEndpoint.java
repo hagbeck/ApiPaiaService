@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2015-2016, Hans-Georg Becker
+Copyright (c) 2015-2016, Hans-Georg Becker, http://orcid.org/0000-0003-0432-294X
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -128,9 +128,9 @@ public class PaiaAuthEndpoint extends HttpServlet {
         // init logger
         PropertyConfigurator.configure(this.config.getProperty("service.log4j-conf"));
 
-        this.logger.info("[" + this.config.getProperty("service.name") + "] " + "Starting 'PAIAauth Auth Endpoint' ...");
-        this.logger.info("[" + this.config.getProperty("service.name") + "] " + "conf-file = " + this.conffile);
-        this.logger.info("[" + this.config.getProperty("service.name") + "] " + "log4j-conf-file = " + this.config.getProperty("service.log4j-conf"));
+        this.logger.info("Starting 'PAIA Auth Endpoint' ...");
+        this.logger.info("conf-file = " + this.conffile);
+        this.logger.info("log4j-conf-file = " + this.config.getProperty("service.log4j-conf"));
     }
 
     protected void doGet(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) throws ServletException, IOException {
@@ -146,8 +146,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
         String language;
         String redirect_url;
 
-        this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "PathInfo = " + httpServletRequest.getPathInfo());
-        this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "QueryString = " + httpServletRequest.getQueryString());
+        this.logger.debug("PathInfo = " + httpServletRequest.getPathInfo());
+        this.logger.debug("QueryString = " + httpServletRequest.getQueryString());
 
         String service = "";
         String authorization = "";
@@ -167,7 +167,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
         while ( headerNames.hasMoreElements() ) {
 
             String headerNameKey = (String) headerNames.nextElement();
-            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "headerNameKey = " + headerNameKey + " / headerNameValue = " + httpServletRequest.getHeader(headerNameKey));
+            this.logger.debug("headerNameKey = " + headerNameKey + " / headerNameValue = " + httpServletRequest.getHeader(headerNameKey));
 
             if (headerNameKey.equals("Accept")) {
 
@@ -185,14 +185,14 @@ public class PaiaAuthEndpoint extends HttpServlet {
             }
             if (headerNameKey.equals("Accept-Language")) {
                 language = httpServletRequest.getHeader( headerNameKey );
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + "Accept-Language: " + language);
+                this.logger.debug("Accept-Language: " + language);
             }
             if (headerNameKey.equals("Authorization")) {
                 authorization = httpServletRequest.getHeader( headerNameKey );
             }
         }
 
-        this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "Service: " + service);
+        this.logger.debug("Service: " + service);
 
         if (httpServletRequest.getParameter("format") != null && !httpServletRequest.getParameter("format").equals("")) {
 
@@ -203,7 +203,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
         if (format.equals("html") && Lookup.lookupAll(ObjectToHtmlTransformation.class).size() == 0) {
 
-            this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_BAD_REQUEST + ": " + "html not implemented!");
+            this.logger.error(HttpServletResponse.SC_BAD_REQUEST + ": " + "html not implemented!");
 
             // Error handling mit suppress_response_codes=true
             if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -281,7 +281,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 }
             }
 
-            this.logger.debug("[" + this.config.getProperty("service.name") + "] " + "Access_token: " + authorization);
+            this.logger.debug("Access_token: " + authorization);
 
             StringBuffer jb = new StringBuffer();
             String line = null;
@@ -295,8 +295,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
             this.logger.info(requestBody);
 
-            httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
-            httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
+            httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
+            httpServletResponse.setHeader("Cache-Control", this.config.getProperty("Cache-Control"));
 
             // 2. Schritt: Service
             if (service.equals("login") || service.equals("logout") || service.equals("change") || service.equals("renew")) {
@@ -305,7 +305,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
             }
             else {
 
-                this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_METHOD_NOT_ALLOWED + ": " + "POST for '" + service + "' not allowed!");
+                this.logger.error(HttpServletResponse.SC_METHOD_NOT_ALLOWED + ": " + "POST for '" + service + "' not allowed!");
 
                 // Error handling mit suppress_response_codes=true
                 if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -333,8 +333,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
         httpServletResponse.setHeader("Access-Control-Allow-Methods", this.config.getProperty("Access-Control-Allow-Methods"));
         httpServletResponse.addHeader("Access-Control-Allow-Headers", this.config.getProperty("Access-Control-Allow-Headers"));
         httpServletResponse.setHeader("Accept", this.config.getProperty("Accept"));
-        httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
-        httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Cache-Control", this.config.getProperty("Cache-Control"));
 
         httpServletResponse.getWriter().println();
     }
@@ -367,7 +367,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         catch (AuthorizationException e) {
 
                             // TODO correct error handling
-                            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + "!");
+                            this.logger.error(HttpServletResponse.SC_UNAUTHORIZED + "!");
                         }
 
                         // delete cookie
@@ -466,7 +466,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         catch (AuthorizationException e) {
 
                             // TODO correct error handling
-                            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + "!");
+                            this.logger.error(HttpServletResponse.SC_UNAUTHORIZED + "!");
                         }
 
                         if (!responseJson.equals("")) {
@@ -478,8 +478,8 @@ public class PaiaAuthEndpoint extends HttpServlet {
                             loginResponse.setRefresh_expires_in(null);
                             loginResponse.setPatron(loginRequest.getUsername());
 
-                            httpServletResponse.setHeader("Access-Control-Allow-Origin", config.getProperty("Access-Control-Allow-Origin"));
-                            httpServletResponse.setHeader("Cache-Control", config.getProperty("Cache-Control"));
+                            httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
+                            httpServletResponse.setHeader("Cache-Control", this.config.getProperty("Cache-Control"));
                             httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
                             // add cookie
@@ -657,7 +657,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 }
                 else {
 
-                    this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_SERVICE_UNAVAILABLE + ": Config Error!");
+                    this.logger.error(HttpServletResponse.SC_SERVICE_UNAVAILABLE + ": Config Error!");
 
                     // Error handling mit suppress_response_codes=true
                     if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -698,7 +698,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         catch (AuthorizationException e) {
 
                             // TODO correct error handling
-                            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + "!");
+                            this.logger.error(HttpServletResponse.SC_UNAUTHORIZED + "!");
                         }
                     }
 
@@ -743,7 +743,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 }
                 else {
 
-                    this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_SERVICE_UNAVAILABLE + ": Config Error!");
+                    this.logger.error(HttpServletResponse.SC_SERVICE_UNAVAILABLE + ": Config Error!");
 
                     // Error handling mit suppress_response_codes=true
                     if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -789,17 +789,17 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         catch (AuthorizationException e) {
 
                             // TODO correct error handling
-                            this.logger.error("[" + config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + "!");
+                            this.logger.error(HttpServletResponse.SC_UNAUTHORIZED + "!");
                         }
                     }
                     else {
 
                         // TODO correct error handling
-                        this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": " + "Authorization Interface not implemented!");
+                        this.logger.error(HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": " + "Authorization Interface not implemented!");
                     }
                 }
 
-                this.logger.debug("[" + config.getProperty("service.name") + "] " + "Authorization: " + access_token + " - " + isAuthorized);
+                this.logger.debug("Authorization: " + access_token + " - " + isAuthorized);
 
                 if (!isAuthorized) {
 
@@ -871,7 +871,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                             } else {
 
                                 // 401 UNAUTHORIZED
-                                this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + ": Wrong old password!");
+                                this.logger.error(HttpServletResponse.SC_UNAUTHORIZED + ": Wrong old password!");
 
                                 // Error handling mit suppress_response_codes=true
                                 if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -894,7 +894,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         } catch (LibraryManagementSystemException e) {
 
                             // 401 UNAUTHORIZED
-                            this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + ": " + e.getMessage());
+                            this.logger.error(HttpServletResponse.SC_UNAUTHORIZED + ": " + e.getMessage());
 
                             // Error handling mit suppress_response_codes=true
                             if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -915,7 +915,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                             this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                         } catch (Exception e) {
 
-                            this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Config Error!");
+                            this.logger.error(HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Config Error!");
 
                             // Error handling mit suppress_response_codes=true
                             if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -937,7 +937,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         }
                     } else {
 
-                        this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Config Error!");
+                        this.logger.error(HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Config Error!");
 
                         // Error handling mit suppress_response_codes=true
                         if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -1028,7 +1028,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         else {
 
                             // 401 SC_UNAUTHORIZED
-                            this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_UNAUTHORIZED + ": Wrong usergroup!");
+                            this.logger.error(HttpServletResponse.SC_UNAUTHORIZED + ": Wrong usergroup!");
 
                             // Error handling mit suppress_response_codes=true
                             if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -1054,7 +1054,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                         e.printStackTrace();
 
                         // 400 SC_BAD_REQUEST
-                        this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_BAD_REQUEST + ": " + e.getMessage());
+                        this.logger.error(HttpServletResponse.SC_BAD_REQUEST + ": " + e.getMessage());
 
                         // Error handling mit suppress_response_codes=true
                         if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -1076,7 +1076,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                     }
                     catch (Exception e) {
 
-                        this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Config Error!");
+                        this.logger.error(HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Config Error!");
 
                         // Error handling mit suppress_response_codes=true
                         if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -1099,7 +1099,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
                 }
                 else {
 
-                    this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Config Error!");
+                    this.logger.error(HttpServletResponse.SC_INTERNAL_SERVER_ERROR + ": Config Error!");
 
                     // Error handling mit suppress_response_codes=true
                     if (httpServletRequest.getParameter("suppress_response_codes") != null) {
@@ -1124,7 +1124,7 @@ public class PaiaAuthEndpoint extends HttpServlet {
             }
             default: {
 
-                this.logger.error("[" + this.config.getProperty("service.name") + "] " + HttpServletResponse.SC_BAD_REQUEST + "Unknown function! (" + service + ")");
+                this.logger.error(HttpServletResponse.SC_BAD_REQUEST + "Unknown function! (" + service + ")");
 
                 // Error handling mit suppress_response_codes=true
                 if (httpServletRequest.getParameter("suppress_response_codes") != null && !httpServletRequest.getParameter("suppress_response_codes").equals("")) {

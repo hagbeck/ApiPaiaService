@@ -1,7 +1,7 @@
 /*
 The MIT License (MIT)
 
-Copyright (c) 2015, Hans-Georg Becker
+Copyright (c) 2015-2016, Hans-Georg Becker, http://orcid.org/0000-0003-0432-294X
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -38,9 +38,9 @@ import java.util.Properties;
 
 public class PaiaService {
 
-    private static String conffile  = "conf/paia.properties";
-
     public static void main(String[] args) throws Exception {
+
+        String conffile  = "conf/paia.properties";
 
         if (args.length == 1) {
             conffile = args[0];
@@ -73,9 +73,9 @@ public class PaiaService {
         PropertyConfigurator.configure(config.getProperty("service.log4j-conf"));
         Logger logger = Logger.getLogger(PaiaService.class.getName());
 
-        logger.info("[" + config.getProperty("service.name") + "] " + "Starting 'PaiaService' ...");
-        logger.info("[" + config.getProperty("service.name") + "] " + "conf-file = " + conffile);
-        logger.info("[" + config.getProperty("service.name") + "] " + "log4j-conf-file = " + config.getProperty("service.log4j-conf"));
+        logger.info("Starting 'PaiaService' ...");
+        logger.info("conf-file = " + conffile);
+        logger.info("log4j-conf-file = " + config.getProperty("service.log4j-conf"));
 
         // server
         Server server = new Server(Integer.parseInt(config.getProperty("service.port")));

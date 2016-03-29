@@ -978,57 +978,83 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                         Patron patron = libraryManagementSystem.patron(newPasswordRequest.getPatron(), true);
 
-                        boolean isRenewed = libraryManagementSystem.renewPassword(newPasswordRequest, patron);
+                        if (patron.getEmail() != null && !patron.getEmail().equals("")) {
 
-                        if (isRenewed) {
+                            boolean isRenewed = libraryManagementSystem.renewPassword(newPasswordRequest, patron);
 
-                            // E-Mail to user
-                            Mailer mailer = new Mailer(this.config.getProperty("service.mailer.conf"));
+                            if (isRenewed) {
 
-                            try {
+                                // E-Mail to user
+                                Mailer mailer = new Mailer(this.config.getProperty("service.mailer.conf"));
 
-                                // TODO patron.getEMail()
-                                mailer.postMail(this.config.getProperty("service.mailer.renew.subject"), this.config.getProperty("service.mailer.renew.message"));
+                                try {
 
-                            } catch (MessagingException e1) {
+                                    // TODO patron.getEMail()
+                                    mailer.postMail(this.config.getProperty("service.mailer.renew.subject"), this.config.getProperty("service.mailer.renew.message"));
 
-                                this.logger.error(e1.getMessage(), e1.getCause());
+                                } catch (MessagingException e1) {
+
+                                    this.logger.error(e1.getMessage(), e1.getCause());
+                                }
+
+                                this.logger.info("Password resetted. Mail send to '" + patron.getEmail() + "'.");
+
+                                // 200 OK
+                                if (format.equals("html")) {
+
+                                    format = "json"; // TODO or what else?
+                                }
+
+                                Patron responsePatron = new Patron();
+                                responsePatron.setUsername(patron.getUsername());
+                                responsePatron.setStatus(patron.getStatus());
+                                responsePatron.setEmail(new InternetAddress(patron.getEmail()));
+
+                                if (format.equals("json")) {
+
+                                    httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                    mapper.writeValue(httpServletResponse.getWriter(), responsePatron);
+                                }
+
+                                if (format.equals("xml")) {
+
+                                    JAXBContext context = JAXBContext.newInstance(Patron.class);
+                                    Marshaller m = context.createMarshaller();
+                                    m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
+
+                                    // Write to HttpResponse
+                                    httpServletResponse.setContentType("application/xml;charset=UTF-8");
+                                    m.marshal(responsePatron, httpServletResponse.getWriter());
+                                }
                             }
+                            else {
 
-                            this.logger.info("Password resetted. Mail send to '" + patron.getEmail() + "'.");
+                                // 401 SC_UNAUTHORIZED
+                                this.logger.error(HttpServletResponse.SC_UNAUTHORIZED + ": Wrong usergroup!");
 
-                            // 200 OK
-                            if (format.equals("html")) {
+                                // Error handling mit suppress_response_codes=true
+                                if (httpServletRequest.getParameter("suppress_response_codes") != null) {
+                                    httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                                }
+                                // Error handling mit suppress_response_codes=false (=default)
+                                else {
+                                    httpServletResponse.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                                }
 
-                                format = "json"; // TODO or what else?
-                            }
+                                // Json für Response body
+                                RequestError requestError = new RequestError();
+                                requestError.setError(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED)));
+                                requestError.setCode(HttpServletResponse.SC_UNAUTHORIZED);
+                                requestError.setDescription(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".description"));
+                                requestError.setErrorUri(this.config.getProperty("error." + Integer.toString(HttpServletResponse.SC_UNAUTHORIZED) + ".uri"));
 
-                            Patron responsePatron = new Patron();
-                            responsePatron.setUsername(patron.getUsername());
-                            responsePatron.setStatus(patron.getStatus());
-                            responsePatron.setEmail(new InternetAddress(patron.getEmail()));
-
-                            if (format.equals("json")) {
-
-                                httpServletResponse.setContentType("application/json;charset=UTF-8");
-                                mapper.writeValue(httpServletResponse.getWriter(), responsePatron);
-                            }
-
-                            if (format.equals("xml")) {
-
-                                JAXBContext context = JAXBContext.newInstance(Patron.class);
-                                Marshaller m = context.createMarshaller();
-                                m.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, Boolean.TRUE);
-
-                                // Write to HttpResponse
-                                httpServletResponse.setContentType("application/xml;charset=UTF-8");
-                                m.marshal(responsePatron, httpServletResponse.getWriter());
+                                this.sendRequestError(httpServletResponse, requestError, format, language, redirect_url);
                             }
                         }
                         else {
 
                             // 401 SC_UNAUTHORIZED
-                            this.logger.error(HttpServletResponse.SC_UNAUTHORIZED + ": Wrong usergroup!");
+                            this.logger.error(HttpServletResponse.SC_UNAUTHORIZED + ": No E-Mail-Address exists!");
 
                             // Error handling mit suppress_response_codes=true
                             if (httpServletRequest.getParameter("suppress_response_codes") != null) {

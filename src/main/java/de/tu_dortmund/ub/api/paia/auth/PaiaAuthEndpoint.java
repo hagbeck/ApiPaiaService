@@ -831,8 +831,12 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                                 try {
 
-                                    // TODO patron.getEMail()
-                                    mailer.postMail(this.config.getProperty("service.mailer.change.subject"), this.config.getProperty("service.mailer.change.message"));
+                                    if (this.config.getProperty("isTestMode") != null && !Boolean.parseBoolean(this.config.getProperty("isTestMode"))) {
+                                        mailer.postMail(patron.getEmail(), this.config.getProperty("service.mailer.change.subject"), this.config.getProperty("service.mailer.change.message"));
+                                    }
+                                    else {
+                                        mailer.postMail(this.config.getProperty("service.mailer.change.subject"), this.config.getProperty("service.mailer.change.message"));
+                                    }
 
                                 } catch (MessagingException e1) {
 
@@ -989,8 +993,12 @@ public class PaiaAuthEndpoint extends HttpServlet {
 
                                 try {
 
-                                    // TODO patron.getEMail()
-                                    mailer.postMail(this.config.getProperty("service.mailer.renew.subject"), this.config.getProperty("service.mailer.renew.message"));
+                                    if (this.config.getProperty("isTestMode") != null && !Boolean.parseBoolean(this.config.getProperty("isTestMode"))) {
+                                        mailer.postMail(patron.getEmail(), this.config.getProperty("service.mailer.renew.subject"), this.config.getProperty("service.mailer.renew.message"));
+                                    }
+                                    else {
+                                        mailer.postMail(this.config.getProperty("service.mailer.renew.subject"), this.config.getProperty("service.mailer.renew.message"));
+                                    }
 
                                 } catch (MessagingException e1) {
 

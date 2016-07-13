@@ -1832,7 +1832,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             String value = "";
 
                             // Jedis-Objekt zur Kommunikation mit Redis
-                            Jedis jedis = new Jedis("pc225.ub.tu-dortmund.de", 9022);
+                            Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
 
                             if (jedis.hexists(patronid, listName)) {
                                 // JSON-Struktur aus Redis holen und in Records-Objekt ablegen
@@ -1905,7 +1905,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         String value = "";
 
                         // Jedis-Objekt zur Kommunikation mit Redis
-                        Jedis jedis = new Jedis("pc225.ub.tu-dortmund.de", 9022);
+                        Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
 
                         if (jedis.hexists(patronid, listName)) {
                             // JSON-Struktur aus Redis holen und in Records-Objekt ablegen
@@ -1932,7 +1932,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             // ArrayList in FavoriteList für Ausgabe
                             favoriteList.setRecordids(al);
 
-                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            httpServletResponse.setStatus(HttpServletResponse.SC_NO_CONTENT);
                         }
                         else {
                             httpServletResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
@@ -1942,7 +1942,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "favorites": {
                         // Jedis-Objekt zur Kommunikation mit Redis
-                        Jedis jedis = new Jedis("pc225.ub.tu-dortmund.de", 9022);
+                        Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
 
                         // Auszugebende Merkliste
                         FavoriteList favoriteList = new FavoriteList();

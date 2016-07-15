@@ -8,7 +8,7 @@ import javax.xml.bind.annotation.XmlRootElement;
 /**
  * Created by ubmit on 18.02.2016.
  */
-
+@Deprecated
 @JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
 @XmlRootElement(name = "fav")
 public class Favorite {

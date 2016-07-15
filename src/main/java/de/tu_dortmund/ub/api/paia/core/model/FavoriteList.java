@@ -15,12 +15,12 @@ import java.util.ArrayList;
 public class FavoriteList {
 
     private String list;
-    private ArrayList<Favorite> recordids;
+    private ArrayList<String> recordids;
 
     @XmlElement
-    public ArrayList<Favorite> getRecordids() {return recordids;}
+    public ArrayList<String> getRecordids() {return recordids;}
 
-    public void setRecordids(ArrayList<Favorite> favs) {this.recordids = favs;}
+    public void setRecordids(ArrayList<String> favs) {this.recordids = favs;}
 
     @XmlAttribute
     public String getList() {return list;}

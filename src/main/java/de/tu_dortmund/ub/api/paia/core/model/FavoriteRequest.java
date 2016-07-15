@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
+import java.util.ArrayList;
 
 /**
  * Created by ubmit (Kolt) on 29.02.2016.
@@ -12,7 +13,7 @@ import javax.xml.bind.annotation.XmlRootElement;
 @XmlRootElement(name = "favoriteRequest")
 public class FavoriteRequest {
     private String list;
-    private String recordid;
+    private ArrayList<String> recordids;
 
     @XmlElement
     public String getList() {return list;}
@@ -22,11 +23,11 @@ public class FavoriteRequest {
     }
 
     @XmlElement
-    public String getRecordid() {
-        return recordid;
+    public ArrayList<String> getRecordids() {
+        return recordids;
     }
 
-    public void setRecordid(String favoriteId) {
-        this.recordid = favoriteId;
+    public void setRecordids(ArrayList<String> recordids) {
+        this.recordids = recordids;
     }
 }

@@ -14,14 +14,14 @@ import java.util.ArrayList;
 @JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
 @XmlRootElement(name = "records")
 public class Records {
-    private ArrayList<Favorite> recordids;
+    private ArrayList<String> recordids;
 
     @XmlElement
-    public ArrayList<Favorite> getRecordids() {
+    public ArrayList<String> getRecordids() {
         return recordids;
     }
 
-    public void setRecordids(ArrayList<Favorite> recordids) {
+    public void setRecordids(ArrayList<String> recordids) {
         this.recordids = recordids;
     }
 }

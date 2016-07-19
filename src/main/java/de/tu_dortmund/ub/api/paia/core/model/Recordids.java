@@ -13,7 +13,7 @@ import java.util.ArrayList;
 
 @JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
 @XmlRootElement(name = "records")
-public class Records {
+public class Recordids {
     private ArrayList<String> recordids;
 
     @XmlElement

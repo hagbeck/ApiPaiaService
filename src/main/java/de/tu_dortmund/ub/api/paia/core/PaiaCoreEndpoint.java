@@ -25,6 +25,7 @@ SOFTWARE.
 package de.tu_dortmund.ub.api.paia.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opencsv.CSVWriter;
 import de.tu_dortmund.ub.api.paia.core.model.*;
 import de.tu_dortmund.ub.api.paia.interfaces.AuthorizationException;
 import de.tu_dortmund.ub.api.paia.interfaces.AuthorizationInterface;
@@ -38,6 +39,7 @@ import de.tu_dortmund.ub.util.output.TransformationException;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import redis.clients.jedis.Jedis;
+import redis.clients.jedis.ScanResult;
 
 import javax.servlet.ServletException;
 import javax.servlet.http.Cookie;
@@ -50,6 +52,8 @@ import javax.xml.bind.Marshaller;
 import java.io.*;
 import java.net.URLDecoder;
 import java.net.URLEncoder;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.*;
 
 /**
@@ -125,12 +129,18 @@ public class PaiaCoreEndpoint extends HttpServlet {
         this.doPost(httpServletRequest, httpServletResponse);
     }
 
-
-
-
+    /**
+     *
+     * @param httpServletRequest
+     * @param httpServletResponse
+     */
     protected void doDelete(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) {
+
+        this.logger.debug("PathInfo = " + httpServletRequest.getPathInfo());
+        this.logger.debug("QueryString = " + httpServletRequest.getQueryString());
+
         String patronid = "";
-        String service ="";
+        String service = "";
         String listName = "";
 
         String path = httpServletRequest.getPathInfo();
@@ -145,16 +155,19 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 // Jedis-Objekt zur Kommunikation mit Redis
                 Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
 
-                if (listName.equals("")) {
-                    httpServletResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                }
-                else {
-                    if (service.equals("deletefavlist") && jedis.hexists(patronid, listName)) {
+                if (service.equals("deletefavlist")) {
+                    if (jedis.hexists(patronid, listName)) {
                         jedis.hdel(patronid, listName);
 
                         httpServletResponse.setStatus(HttpServletResponse.SC_NO_CONTENT);
                     }
+                    else {
+                        httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                    }
                 }
+            }
+            else {
+                httpServletResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             }
         }
     }
@@ -183,7 +196,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
         String authorization = "";
 
         String listName = "";
-        FavoriteRequest favoriteRequest = new FavoriteRequest();
+        FavoriteList favoriteRequest = new FavoriteList();
 
         String path = httpServletRequest.getPathInfo();
         if (path != null) {
@@ -194,8 +207,19 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 service = "patron";
             }
             else if (params.length == 2) {
-                patronid = params[0];
-                service = params[1];
+                if (params[0].equals("backup")) {
+                    switch (params[1]) {
+                        case "favorites" :
+                            patronid = "ubdo";
+                            service = "backup/favorites";
+                            break;
+                        // hier ggf. weitere cases für andere Backups ergänzen
+                    }
+                }
+                else {
+                    patronid = params[0];
+                    service = params[1];
+                }
             }
             else if (params[1].equals("items") && params.length > 2) {
                 patronid = params[0];
@@ -289,7 +313,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
             String requestBody = jb.toString();
 
             if (service.equals("favor") || service.equals("unfavor")) {
-                favoriteRequest = mapper.readValue(requestBody, FavoriteRequest.class);
+                favoriteRequest = mapper.readValue(requestBody, FavoriteList.class);
             }
 
             // read document list
@@ -380,7 +404,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 if ((httpServletRequest.getMethod().equals("GET") && (service.equals("patron") || service.equals("fullpatron") ||
                         service.equals("items") || service.startsWith("items/ordered") || service.startsWith("items/reserved") ||
                         service.startsWith("items/borrowed") || service.startsWith("items/borrowed/ill") || service.startsWith("items/borrowed/renewed") || service.startsWith("items/borrowed/recalled") ||
-                        service.equals("fees") || service.equals("request") || service.equals("favorites"))) ||
+                        service.equals("fees") || service.equals("request") || service.equals("favorites") || service.equals("backup/favorites"))) ||
                         (httpServletRequest.getMethod().equals("POST") && (service.equals("request") || service.equals("renew") || service.equals("cancel") || service.equals("favor") || service.equals("unfavor")))) {
 
                     // get 'Accept' and 'Authorization' from Header
@@ -638,7 +662,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
     /**
      * PAIA core services: Prüfe jeweils die scopes und liefere die Daten
      */
-    private void provideService(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, String format, String language, String redirect_url, DocumentList documents, String listName, FavoriteRequest favoriteRequest) throws IOException {
+    private void provideService(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, String format, String language, String redirect_url, DocumentList documents, String listName, FavoriteList favoriteRequest) throws IOException {
 
         httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
         httpServletResponse.setHeader("Cache-Control", this.config.getProperty("Cache-Control"));
@@ -1851,10 +1875,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         listName = favoriteRequest.getList();
 
                         if (!listName.equals("")) {
-                            // Merkliste, in die der Favorit hinzugefuegt werden soll, als Objekt
-                            FavoriteList favoriteList = new FavoriteList();
-                            favoriteList.setList(listName);
-
                             // Variable zum Lesen aus bzw. Schreiben in Redis
                             String value = "";
 
@@ -1862,12 +1882,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
 
                             if (jedis.hexists(patronid, listName)) {
-                                // JSON-Struktur aus Redis holen und in Records-Objekt ablegen
+                                // JSON-Struktur aus Redis holen und in Recordids-Objekt ablegen
                                 value = jedis.hget(patronid, listName);
-                                Records records = mapper.readValue(value, Records.class);
+                                Recordids recordids = mapper.readValue(value, Recordids.class);
 
                                 // ArrayList zum Arbeiten
-                                ArrayList<String> al = records.getRecordids();
+                                ArrayList<String> al = recordids.getRecordids();
 
                                 // Favoriten hinzufügen, wenn diese noch nicht in ArrayList enthalten sind
                                 for (int j = 0; j < favoriteRequest.getRecordids().size(); j++) {
@@ -1882,15 +1902,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                     }
                                 }
 
-                                // Zurückschreiben der ArrayList in Records-Objekt
-                                records.setRecordids(al);
+                                // Zurückschreiben der ArrayList in Recordids-Objekt
+                                recordids.setRecordids(al);
 
-                                // Records nach Redis:
-                                value = mapper.writeValueAsString(records);
+                                // Recordids nach Redis:
+                                value = mapper.writeValueAsString(recordids);
                                 jedis.hset(patronid, listName, value);
-
-                                // ArrayList in FavoriteList für Ausgabe
-                                favoriteList.setRecordids(al);
                             }
                             else {
                                 // ArrayList zum Arbeiten
@@ -1901,16 +1918,13 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                     al.add(favoriteRequest.getRecordids().get(j));
                                 }
 
-                                // Anlage eines Records-Objekts zur Aufnahme der ArrayList
-                                Records records = new Records();
-                                records.setRecordids(al);
+                                // Anlage eines Recordids-Objekts zur Aufnahme der ArrayList
+                                Recordids recordids = new Recordids();
+                                recordids.setRecordids(al);
 
-                                // Records nach Redis:
-                                value = mapper.writeValueAsString(records);
+                                // Recordids nach Redis:
+                                value = mapper.writeValueAsString(recordids);
                                 jedis.hset(patronid, listName, value);
-
-                                // ArrayList in FavoriteList für Ausgabe
-                                favoriteList.setRecordids(al);
                             }
 
                             httpServletResponse.setStatus(HttpServletResponse.SC_CREATED);
@@ -1926,10 +1940,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         // Name der Merkliste aus dem Request-Body
                         listName = favoriteRequest.getList();
 
-                        // Merkliste, aus der der Favorit entfernt werden soll, als Objekt
-                        FavoriteList favoriteList = new FavoriteList();
-                        favoriteList.setList(listName);
-
                         // Variable zum Lesen aus bzw. Schreiben in Redis
                         String value = "";
 
@@ -1937,12 +1947,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
 
                         if (jedis.hexists(patronid, listName)) {
-                            // JSON-Struktur aus Redis holen und in Records-Objekt ablegen
+                            // JSON-Struktur aus Redis holen und in Recordids-Objekt ablegen
                             value = jedis.hget(patronid, listName);
-                            Records records = mapper.readValue(value, Records.class);
+                            Recordids recordids = mapper.readValue(value, Recordids.class);
 
                             // ArrayList zum Arbeiten
-                            ArrayList<String> al = records.getRecordids();
+                            ArrayList<String> al = recordids.getRecordids();
 
                             // Favoriten aus der ArrayList entfernen
                             for (int j = 0; j < favoriteRequest.getRecordids().size(); j++) {
@@ -1953,15 +1963,12 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 }
                             }
 
-                            // Arraylist zurück in Records-Objekt
-                            records.setRecordids(al);
+                            // Arraylist zurück in Recordids-Objekt
+                            recordids.setRecordids(al);
 
-                            // Records nach Redis:
-                            value = mapper.writeValueAsString(records);
+                            // Recordids nach Redis:
+                            value = mapper.writeValueAsString(recordids);
                             jedis.hset(patronid, listName, value);
-
-                            // ArrayList in FavoriteList für Ausgabe
-                            favoriteList.setRecordids(al);
 
                             httpServletResponse.setStatus(HttpServletResponse.SC_NO_CONTENT);
                         }
@@ -1979,14 +1986,14 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         if (listName.equals("")){
                             Set<String> listsOfPatron = jedis.hkeys(patronid);
 
-                            ListOfFavoriteLists listOfFavoriteLists = new ListOfFavoriteLists();
-                            listOfFavoriteLists.setPatron(patronid);
-                            listOfFavoriteLists.setFavoriteLists(listsOfPatron);
+                            FavoriteListList favoriteListList = new FavoriteListList();
+                            favoriteListList.setPatron(patronid);
+                            favoriteListList.setFavoriteLists(listsOfPatron);
                             // JSON-Ausgabe mit Jackson
                             if (format.equals("json")) {
                                 httpServletResponse.setStatus(HttpServletResponse.SC_OK);
                                 httpServletResponse.setContentType("application/json;charset=UTF-8");
-                                mapper.writeValue(httpServletResponse.getWriter(), listOfFavoriteLists);
+                                mapper.writeValue(httpServletResponse.getWriter(), favoriteListList);
                             }
                         }
                         // sonst, Ausgabe der angegebenen Merkliste
@@ -1997,9 +2004,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                             if (jedis.hexists(patronid, listName)) {
                                 String value = jedis.hget(patronid, listName);
-                                Records records = mapper.readValue(value, Records.class);
+                                Recordids recordids = mapper.readValue(value, Recordids.class);
 
-                                favoriteList.setRecordids(records.getRecordids());
+                                favoriteList.setRecordids(recordids.getRecordids());
 
                                 httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
@@ -2018,6 +2025,52 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         }
                         break;
                     }
+                    case "backup/favorites" : {
+                        // Jedis-Objekt zur Kommunikation mit Redis
+                        Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
+
+                        // CSV-Writer zum Schreiben der Merklisten in eine CSV-Datei
+                        CSVWriter csvWriter = new CSVWriter(new FileWriter("." + File.separator + "backup-favlists_" + LocalDate.now().toString() + ".csv"), ';', CSVWriter.NO_QUOTE_CHARACTER, CSVWriter.NO_ESCAPE_CHARACTER);
+
+                        // Variablen zur Aufnahme des Ergebnisses einer SCAN-Anfrage an Redis
+                        String cursor = "0";
+                        List<String> resultList;
+
+                        // Schleife, bis cursor wieder bei "0" ist, um alle keys abzufragen
+                        do {
+                            ScanResult<String> scanResult = jedis.scan(cursor);
+                            resultList = scanResult.getResult();
+
+                            // Schleife über alle keys
+                            for (int i = 0; i < resultList.size(); i++) {
+                                String key = resultList.get(i);
+
+                                // Überprüfung, ob unter dem key ein hash gespeichert ist
+                                if (jedis.type(key).equals("hash")) {
+                                    Set<String> fields = jedis.hkeys(key);
+
+                                    // Schleife über alle fields eines key
+                                    for (String field : fields) {
+                                        String value = jedis.hget(key, field);
+
+                                        csvWriter.writeNext(new String[]{key, field, value});
+                                    }
+                                }
+                            }
+
+                            // Neu Setzen des Cursors
+                            cursor = scanResult.getStringCursor();
+                        } while (!cursor.equals("0"));
+
+                        csvWriter.close();
+                        jedis.close();
+
+                        httpServletResponse.setStatus(HttpServletResponse.SC_CREATED);
+                        break;
+                    }
+
+                    // hier ggf. weitere cases für andere Backup-Szenarien
+
                 }
 
             }

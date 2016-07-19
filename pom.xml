@@ -154,6 +154,13 @@
             <type>jar</type>
             <scope>compile</scope>
         </dependency>
+
+        <!-- opencsv -->
+        <dependency>
+            <groupId>com.opencsv</groupId>
+            <artifactId>opencsv</artifactId>
+            <version>3.7</version>
+        </dependency>
     </dependencies>
 
     <build>

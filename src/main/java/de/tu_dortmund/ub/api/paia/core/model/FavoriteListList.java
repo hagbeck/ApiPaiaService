@@ -10,8 +10,8 @@ import java.util.Set;
  * Created by ubmit on 14.07.2016.
  */
 @JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
-@XmlRootElement(name = "listOfFavLists")
-public class ListOfFavoriteLists {
+@XmlRootElement(name = "listOfLists")
+public class FavoriteListList {
     private String patron;
     private Set<String> favoriteLists;
 
@@ -23,10 +23,10 @@ public class ListOfFavoriteLists {
         this.favoriteLists = favoriteLists;
     }
 
+    @XmlElement
     public String getPatron() {
         return patron;
     }
-
     public void setPatron(String patron) {
         this.patron = patron;
     }

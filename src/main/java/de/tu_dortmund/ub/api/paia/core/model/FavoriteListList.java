@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 
 import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
+import java.util.ArrayList;
 import java.util.Set;
 
 /**
@@ -13,13 +14,13 @@ import java.util.Set;
 @XmlRootElement(name = "listOfLists")
 public class FavoriteListList {
     private String patron;
-    private Set<String> favoriteLists;
+    private ArrayList<FavoriteList> favoriteLists;
 
     @XmlElement
-    public Set<String> getFavoriteLists() {
+    public ArrayList<FavoriteList> getFavoriteLists() {
         return favoriteLists;
     }
-    public void setFavoriteLists(Set<String> favoriteLists) {
+    public void setFavoriteLists(ArrayList<FavoriteList> favoriteLists) {
         this.favoriteLists = favoriteLists;
     }
 

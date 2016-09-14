@@ -7,11 +7,11 @@ import javax.xml.bind.annotation.XmlRootElement;
 import java.util.ArrayList;
 
 /**
- * Created by ubmit (Kolt) on 29.02.2016.
+ * Created by ubmit on 13.09.2016.
  */
 @JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
-@XmlRootElement(name = "favoriteList")
-public class FavoriteList {
+@XmlRootElement(name = "favoriteRequest")
+public class FavoriteRequest {
     private String list;
     private ArrayList<Favorite> favorites;
 
@@ -25,10 +25,13 @@ public class FavoriteList {
     }
 
     @XmlElement
-    public String getList() {return list;}
-
-    public void setList(String listName) {
-        this.list = listName;
+    public String getList() {
+        return list;
     }
+
+    public void setList(String list) {
+        this.list = list;
+    }
+
 
 }

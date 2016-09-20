@@ -9,6 +9,7 @@ import java.util.ArrayList;
 /**
  * Created by ubmit on 13.09.2016.
  */
+@Deprecated
 @JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
 @XmlRootElement(name = "favoriteRequest")
 public class FavoriteRequest {

@@ -196,7 +196,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
         String authorization = "";
 
         String listName = "";
-        FavoriteRequest favoriteRequest = new FavoriteRequest();
+        FavoriteList favoriteRequest = new FavoriteList();
 
         String path = httpServletRequest.getPathInfo();
         if (path != null) {
@@ -313,7 +313,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
             String requestBody = jb.toString();
 
             if (service.equals("favor") || service.equals("unfavor")) {
-                favoriteRequest = mapper.readValue(requestBody, FavoriteRequest.class);
+                favoriteRequest = mapper.readValue(requestBody, FavoriteList.class);
                 listName = favoriteRequest.getList();
             }
 
@@ -663,7 +663,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
     /**
      * PAIA core services: Prüfe jeweils die scopes und liefere die Daten
      */
-    private void provideService(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, String format, String language, String redirect_url, DocumentList documents, String listName, FavoriteRequest favoriteRequest) throws IOException {
+    private void provideService(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, String format, String language, String redirect_url, DocumentList documents, String listName, FavoriteList favoriteRequest) throws IOException {
 
         httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
         httpServletResponse.setHeader("Cache-Control", this.config.getProperty("Cache-Control"));
@@ -1873,8 +1873,6 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                     case "favor": {
                         if (!listName.equals("")) {
-                            // neue Version:
-
                             // Jedis-Objekt zur Kommunikation mit Redis
                             Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
 
@@ -1910,7 +1908,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 jedis.hset(patronid, listName, listContent);
                             }
                             else {
-                                // Anlegen einer neuen Merkliste als Objekt:
+                                // Anlegen einer neuen Merkliste als Objekt, mit dem Namen aus dem FavoriteRequest:
                                 FavoriteList favoriteList = new FavoriteList();
                                 favoriteList.setList(favoriteRequest.getList());
 
@@ -1941,16 +1939,15 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
 
                         if (jedis.hexists(patronid, listName)) {
-                            // JSON-Struktur, wenn diese existiert, aus Redis holen
+                            // Holen der Merkliste, wenn diese bereits existiert, aus Redis:
                             String listContent = jedis.hget(patronid, listName);
-
                             // Von der String-Variable zum Objekt:
                             FavoriteList favoriteList = mapper.readValue(listContent, FavoriteList.class);
 
                             // ArrayList zum Arbeiten:
                             ArrayList<Favorite> arrayList = favoriteList.getFavorites();
 
-                            // Favoriten aus der ArrayList entfernen
+                            // Einen oder mehrere Favoriten aus der ArrayList entfernen:
                             for (int i = 0; i < favoriteRequest.getFavorites().size(); i++) {
                                 Favorite favoriteToRemove = favoriteRequest.getFavorites().get(i);
                                 for (int j = 0; j < arrayList.size(); j++) {
@@ -1963,7 +1960,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             // Bearbeitete ArrayList in das Objekt:
                             favoriteList.setFavorites(arrayList);
 
-                            // Recordids nach Redis:
+                            // Schreiben in Redis:
                             listContent = mapper.writeValueAsString(favoriteList);
                             jedis.hset(patronid, listName, listContent);
 
@@ -2006,20 +2003,20 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
                         }
                         // sonst, Ausgabe der angegebenen Merkliste
+                        // (evtl. überflüssig, wenn, um Requests zu sparen, nur der if-Zweig genutzt wird)
                         else {
                             if (jedis.hexists(patronid, listName)) {
                                 String listContent = jedis.hget(patronid, listName);
-                                FavoriteList favoriteList = mapper.readValue(listContent, FavoriteList.class);
 
                                 httpServletResponse.setStatus(HttpServletResponse.SC_OK);
 
                                 // XML-Ausgabe mit JAXB
                                 // TODO
 
-                                // JSON-Ausgabe mit Jackson
+                                // JSON-Ausgabe
                                 if (format.equals("json")) {
                                     httpServletResponse.setContentType("application/json;charset=UTF-8");
-                                    mapper.writeValue(httpServletResponse.getWriter(), favoriteList);
+                                    httpServletResponse.getWriter().write(listContent);
                                 }
                             }
                             else {
@@ -2041,6 +2038,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                         // Schleife, bis cursor wieder bei "0" ist, um alle keys abzufragen
                         do {
+                            // SCAN-Anfrage
                             ScanResult<String> scanResult = jedis.scan(cursor);
                             resultList = scanResult.getResult();
 

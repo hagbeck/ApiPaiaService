@@ -15,6 +15,7 @@ public class FavoriteList {
     private String list;
     private String application;
 
+    @XmlElement
     public String getApplication() {
         return application;
     }

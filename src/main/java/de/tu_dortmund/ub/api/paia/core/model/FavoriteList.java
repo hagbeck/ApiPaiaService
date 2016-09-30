@@ -13,6 +13,16 @@ import java.util.ArrayList;
 @XmlRootElement(name = "favoriteList")
 public class FavoriteList {
     private String list;
+    private String application;
+
+    public String getApplication() {
+        return application;
+    }
+
+    public void setApplication(String application) {
+        this.application = application;
+    }
+
     private ArrayList<Favorite> favorites;
 
     @XmlElement

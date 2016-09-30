@@ -1872,7 +1872,11 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         break;
                     }
                     case "favor": {
-                        if (!listName.equals("")) {
+                        if ((favoriteRequest.getApplication().equals("") || favoriteRequest.getApplication().equals(null)) ||
+                                (listName.equals("") || listName.equals(null))) {
+                            httpServletResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                            }
+                            else {
                             // Jedis-Objekt zur Kommunikation mit Redis
                             Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
 
@@ -1928,10 +1932,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
 
                             httpServletResponse.setStatus(HttpServletResponse.SC_CREATED);
-                        }
-                        else {
-                            httpServletResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
-                        }
+                            }
                         break;
                     }
                     case "unfavor": {

@@ -1915,6 +1915,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 // Anlegen einer neuen Merkliste als Objekt, mit dem Namen aus dem FavoriteRequest:
                                 FavoriteList favoriteList = new FavoriteList();
                                 favoriteList.setList(favoriteRequest.getList());
+                                favoriteList.setApplication(favoriteRequest.getApplication());
 
                                 // ArrayList zum Hinzufügen:
                                 ArrayList<Favorite> arrayList = new ArrayList<>();

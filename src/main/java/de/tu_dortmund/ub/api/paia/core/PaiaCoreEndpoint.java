@@ -25,6 +25,7 @@ SOFTWARE.
 package de.tu_dortmund.ub.api.paia.core;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.opencsv.CSVReader;
 import com.opencsv.CSVWriter;
 import de.tu_dortmund.ub.api.paia.core.model.*;
 import de.tu_dortmund.ub.api.paia.interfaces.AuthorizationException;
@@ -41,6 +42,7 @@ import org.apache.log4j.PropertyConfigurator;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.ScanResult;
 
+import javax.json.JsonObject;
 import javax.servlet.ServletException;
 import javax.servlet.http.Cookie;
 import javax.servlet.http.HttpServlet;
@@ -195,6 +197,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
         String accept = "";
         String authorization = "";
 
+        String application = "";
         String listName = "";
         FavoriteList favoriteRequest = new FavoriteList();
 
@@ -231,11 +234,19 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     }
                 }
             }
+            else if ((params[1].equals("favorite") || params[1].equals("favlist")) && params.length > 2) {
+                patronid = params[0];
+                service = params[1];
+                application = params[2];
+                listName = params[3];
+            }
+            /* alt:
             else if (params[1].equals("favorites") && params.length > 2) {
                 patronid = params[0];
                 service = params[1];
                 listName = params[2];
             }
+            */
         }
 
         if (patronid.equals("patronid")) {
@@ -312,9 +323,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
             String requestBody = jb.toString();
 
-            if (service.equals("favor") || service.equals("unfavor")) {
+            if (service.equals("favorite")) {
                 favoriteRequest = mapper.readValue(requestBody, FavoriteList.class);
-                listName = favoriteRequest.getList();
+                // listName = favoriteRequest.getList();
             }
 
             // read document list
@@ -405,8 +416,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 if ((httpServletRequest.getMethod().equals("GET") && (service.equals("patron") || service.equals("fullpatron") ||
                         service.equals("items") || service.startsWith("items/ordered") || service.startsWith("items/reserved") ||
                         service.startsWith("items/borrowed") || service.startsWith("items/borrowed/ill") || service.startsWith("items/borrowed/renewed") || service.startsWith("items/borrowed/recalled") ||
-                        service.equals("fees") || service.equals("request") || service.equals("favorites") || service.equals("backup/favorites"))) ||
-                        (httpServletRequest.getMethod().equals("POST") && (service.equals("request") || service.equals("renew") || service.equals("cancel") || service.equals("favor") || service.equals("unfavor")))) {
+                        service.equals("fees") || service.equals("request") || service.equals("favorites") || service.equals("favlist") || service.equals("backup/favorites"))) ||
+                        (httpServletRequest.getMethod().equals("POST") && (service.equals("request") || service.equals("renew") || service.equals("cancel") || service.equals("favorite")))) {
 
                     // get 'Accept' and 'Authorization' from Header
                     Enumeration<String> headerNames = httpServletRequest.getHeaderNames();
@@ -528,7 +539,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     if (isAuthorized) {
 
                         // execute query
-                        this.provideService(httpServletRequest, httpServletResponse, patronid, service, format, language, redirect_url, documentList, listName, favoriteRequest);
+                        this.provideService(httpServletRequest, httpServletResponse, patronid, service, format, language, redirect_url, documentList, application, listName, favoriteRequest);
                     }
                     else {
 
@@ -663,7 +674,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
     /**
      * PAIA core services: Prüfe jeweils die scopes und liefere die Daten
      */
-    private void provideService(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, String format, String language, String redirect_url, DocumentList documents, String listName, FavoriteList favoriteRequest) throws IOException {
+    private void provideService(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse, String patronid, String service, String format, String language, String redirect_url, DocumentList documents, String application, String listName, FavoriteList favoriteRequest) throws IOException {
 
         httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
         httpServletResponse.setHeader("Cache-Control", this.config.getProperty("Cache-Control"));
@@ -1871,6 +1882,98 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
                         break;
                     }
+                    case "favorite": {
+                        if (listName.equals("") || listName.equals(null)) {
+                            httpServletResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                        }
+                        else {
+                            // Einlesen der Konkordanz, die einer Application einen Redis-DB-Index zuordnet
+                            Map<String, Object> concordance = mapper.readValue(new File("conf/concordance.json"), Map.class);
+                            int appIndex = Integer.parseInt(String.valueOf(concordance.get(application)));
+
+                            Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
+                            jedis.select(appIndex);
+
+                            String listContent;
+
+                            // Fallunterscheidung danach, ob eine Liste mit dem angegebenen Namen bereits existiert
+                            if (jedis.hexists(patronid, listName)) {
+                                // Holen der Liste und Ablegen in ein POJO
+                                listContent = jedis.hget(patronid, listName);
+                                FavoriteList favoriteList = mapper.readValue(listContent, FavoriteList.class);
+
+                                // Hinzufügen des Favoriten, wenn er noch nicht in der Liste enthalten ist, mit Hilfe einer ArrayList
+                                ArrayList<Favorite> al = favoriteList.getFavorites();
+                                String[] recordIds = new String[al.size()];
+                                for (int i = 0; i < al.size(); i++) {
+                                    recordIds[i] = al.get(i).getRecordid();
+                                }
+                                for (int i = 0; i < favoriteRequest.getFavorites().size(); i++) {
+                                    Favorite favoriteToAdd = favoriteRequest.getFavorites().get(i);
+                                    if (!Arrays.asList(recordIds).contains(favoriteToAdd.getRecordid())) {
+                                        al.add(favoriteToAdd);
+                                    }
+                                }
+                                favoriteList.setFavorites(al);
+
+                                // Schreiben in Redis:
+                                listContent = mapper.writeValueAsString(favoriteList);
+                                jedis.hset(patronid, listName, listContent);
+                            }
+                            else {
+                                // Anlegen einer neuen Merkliste als Objekt, mit dem Namen aus dem FavoriteRequest:
+                                FavoriteList favoriteList = new FavoriteList();
+                                favoriteList.setList(favoriteRequest.getList());
+                                favoriteList.setApplication(favoriteRequest.getApplication());
+
+                                // ArrayList zum Hinzufügen:
+                                ArrayList<Favorite> arrayList = new ArrayList<>();
+                                for (int i = 0; i < favoriteRequest.getFavorites().size(); i++) {
+                                    Favorite favorite = favoriteRequest.getFavorites().get(i);
+                                    arrayList.add(favorite);
+                                }
+
+                                // Bearbeitete ArrayList in das Objekt:
+                                favoriteList.setFavorites(arrayList);
+
+                                // Schreiben in Redis
+                                listContent = mapper.writeValueAsString(favoriteList);
+                                jedis.hset(patronid, listName, listContent);
+                            }
+                            httpServletResponse.setStatus(HttpServletResponse.SC_CREATED);
+                        }
+                        break;
+                    }
+                    case "favlist": {
+                        // Einlesen der Konkordanz, die einer Application einen Redis-DB-Index zuordnet
+                        Map<String, Object> concordance = mapper.readValue(new File("conf/concordance.json"), Map.class);
+                        int appIndex = Integer.parseInt(String.valueOf(concordance.get(application)));
+
+                        Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
+                        jedis.select(appIndex);
+
+                        if (jedis.hexists(patronid, listName)) {
+                            String listContent = jedis.hget(patronid, listName);
+
+                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+
+                            // XML-Ausgabe mit JAXB
+                            // TODO
+
+                            // JSON-Ausgabe
+                            if (format.equals("json")) {
+                                httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                httpServletResponse.getWriter().write(listContent);
+                            }
+                        }
+                        else {
+                            httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                        }
+
+                        break;
+                    }
+
+                    // cases 'favor', 'unfavor' und 'favorites' noch entfernen, wenn cases 'favorite' und 'favlist' fertig implementiert
                     case "favor": {
                         if ((favoriteRequest.getApplication().equals("") || favoriteRequest.getApplication().equals(null)) ||
                                 (listName.equals("") || listName.equals(null))) {

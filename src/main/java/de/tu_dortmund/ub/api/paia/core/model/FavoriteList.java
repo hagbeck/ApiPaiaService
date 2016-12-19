@@ -12,9 +12,10 @@ import java.util.ArrayList;
 @JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
 @XmlRootElement(name = "favoriteList")
 public class FavoriteList {
-    private String list;
-    private String application;
+    // private String list;
+    // private String application;
 
+    /*
     @XmlElement
     public String getApplication() {
         return application;
@@ -23,6 +24,7 @@ public class FavoriteList {
     public void setApplication(String application) {
         this.application = application;
     }
+    */
 
     private ArrayList<Favorite> favorites;
 
@@ -35,11 +37,13 @@ public class FavoriteList {
         this.favorites = favorites;
     }
 
+    /*
     @XmlElement
     public String getList() {return list;}
 
     public void setList(String listName) {
         this.list = listName;
     }
+    */
 
 }

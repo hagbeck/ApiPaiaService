@@ -1887,6 +1887,67 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             httpServletResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
                         }
                         else {
+                            Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
+
+                            // Einlesen der Konkordanz, die einer Application einen Redis-DB-Index zuordnet
+                            Map<String, Object> concordance = mapper.readValue(new File("conf/concordance.json"), Map.class);
+                            int appIndex = Integer.parseInt(String.valueOf(concordance.get(application)));
+
+                            jedis.select(appIndex);
+
+                            String listContent;
+
+                            if (jedis.hexists(patronid, listName)) {
+                                listContent = jedis.hget(patronid, listName);
+                                FavoriteList favoriteList = mapper.readValue(listContent, FavoriteList.class);
+
+                                ArrayList<Favorite> arrayList = favoriteList.getFavorites();
+                                String[] recordids = new String[arrayList.size()];
+                                String[] openUrls = new String[arrayList.size()];
+
+                                for (int i = 0; i < arrayList.size(); i++) {
+                                    recordids[i] = arrayList.get(i).getRecordid();
+                                }
+                                for (int i = 0; i < arrayList.size(); i++) {
+                                    openUrls[i] = arrayList.get(i).getOpenUrl();
+                                }
+
+                                for (int i = 0; i < favoriteRequest.getFavorites().size(); i++) {
+                                    Favorite favoriteToAdd = favoriteRequest.getFavorites().get(i);
+                                    if (!Arrays.asList(recordids).contains(favoriteToAdd.getRecordid()) ||
+                                            !Arrays.asList(openUrls).contains(favoriteToAdd.getOpenUrl())) {
+                                        arrayList.add(favoriteToAdd);
+                                    }
+                                }
+
+                                favoriteList.setFavorites(arrayList);
+
+                                listContent = mapper.writeValueAsString(favoriteList);
+                                jedis.hset(patronid, listName, listContent);
+                            }
+
+                            else {
+                                FavoriteList favoriteList = new FavoriteList();
+
+                                ArrayList<Favorite> arrayList =new ArrayList<>();
+                                for (int i = 0; i < favoriteRequest.getFavorites().size(); i++) {
+                                    Favorite favoriteToAdd = favoriteRequest.getFavorites().get(i);
+                                    arrayList.add(favoriteToAdd);
+                                }
+
+                                favoriteList.setFavorites(arrayList);
+                                listContent = mapper.writeValueAsString(favoriteList);
+                                jedis.hset(patronid, listName, listContent);
+                            }
+
+                            httpServletResponse.setStatus(HttpServletResponse.SC_CREATED);
+                        }
+
+                        /* erste Version:
+                        if (listName.equals("") || listName.equals(null)) {
+                            httpServletResponse.setStatus(HttpServletResponse.SC_BAD_REQUEST);
+                        }
+                        else {
                             // Einlesen der Konkordanz, die einer Application einen Redis-DB-Index zuordnet
                             Map<String, Object> concordance = mapper.readValue(new File("conf/concordance.json"), Map.class);
                             int appIndex = Integer.parseInt(String.valueOf(concordance.get(application)));
@@ -1942,6 +2003,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                             }
                             httpServletResponse.setStatus(HttpServletResponse.SC_CREATED);
                         }
+                        */
                         break;
                     }
                     case "favlist": {
@@ -1973,7 +2035,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         break;
                     }
 
-                    // cases 'favor', 'unfavor' und 'favorites' noch entfernen, wenn cases 'favorite' und 'favlist' fertig implementiert
+                    /* alte 'cases' favor, unfavor, favorites auskommentiert
                     case "favor": {
                         if ((favoriteRequest.getApplication().equals("") || favoriteRequest.getApplication().equals(null)) ||
                                 (listName.equals("") || listName.equals(null))) {
@@ -2130,6 +2192,8 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         }
                         break;
                     }
+                    */
+
                     case "backup/favorites" : {
                         // Jedis-Objekt zur Kommunikation mit Redis
                         Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));

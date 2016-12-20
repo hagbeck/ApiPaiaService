@@ -149,6 +149,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
         ObjectMapper mapper = new ObjectMapper();
 
+        // Einlesen der Konkordanz, die einer Application einen Redis-DB-Index zuordnet
+        Map<String, Object> concordance = mapper.readValue(new File("conf/concordance.json"), Map.class);
+
         Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
 
         String path = httpServletRequest.getPathInfo();
@@ -162,12 +165,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     application = params[2];
                     listName = params[3];
 
-                    // Einlesen der Konkordanz, die einer Application einen Redis-DB-Index zuordnet
-                    Map<String, Object> concordance = mapper.readValue(new File("conf/concordance.json"), Map.class);
+                    int appIndexList = Integer.parseInt(String.valueOf(concordance.get(application)));
 
-                    int appIndex = Integer.parseInt(String.valueOf(concordance.get(application)));
-
-                    jedis.select(appIndex);
+                    jedis.select(appIndexList);
 
                     if (jedis.hexists(patronid, listName)) {
                         jedis.hdel(patronid, listName);
@@ -178,6 +178,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
                     }
                     break;
+
                 case 5:            // einzelnen Favoriten löschen
                     patronid = params[0];
                     service = params[1];
@@ -185,8 +186,18 @@ public class PaiaCoreEndpoint extends HttpServlet {
                     listName = params[3];
                     favoriteId = params[4];
 
-                    // TODO
+                    int appIndexSingleFavorite = Integer.parseInt(String.valueOf(concordance.get(application)));
 
+                    jedis.select(appIndexSingleFavorite);
+
+                    if (jedis.hexists(patronid, listName)) {
+                        String listContent = jedis.hget(patronid, listName);
+
+                        // TODO
+                    }
+                    else {
+                        httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                    }
                     break;
             }
         }

@@ -238,7 +238,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 patronid = params[0];
                 service = params[1];
                 application = params[2];
-                listName = params[3];
+                if (params.length > 3) {
+                    listName = params[3];
+                }
             }
             /* alt:
             else if (params[1].equals("favorites") && params.length > 2) {
@@ -2014,22 +2016,46 @@ public class PaiaCoreEndpoint extends HttpServlet {
                         Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
                         jedis.select(appIndex);
 
-                        if (jedis.hexists(patronid, listName)) {
-                            String listContent = jedis.hget(patronid, listName);
+                        if (listName.equals("")) {
+                            Set<String> fieldNames = jedis.hkeys(patronid);
 
-                            httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+                            if (fieldNames.isEmpty()) {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                            }
+                            else {
+                                FavoriteListList favoriteListList = new FavoriteListList();
+                                favoriteListList.setFavoriteLists(fieldNames);
 
-                            // XML-Ausgabe mit JAXB
-                            // TODO
+                                String lists = mapper.writeValueAsString(favoriteListList);
 
-                            // JSON-Ausgabe
-                            if (format.equals("json")) {
-                                httpServletResponse.setContentType("application/json;charset=UTF-8");
-                                httpServletResponse.getWriter().write(listContent);
+                                // XML-Ausgabe mit JAXB
+                                // TODO
+
+                                // JSON-Ausgabe
+                                if (format.equals("json")) {
+                                    httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                    httpServletResponse.getWriter().write(lists);
+                                }
                             }
                         }
                         else {
-                            httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                            if (jedis.hexists(patronid, listName)) {
+                                String listContent = jedis.hget(patronid, listName);
+
+                                httpServletResponse.setStatus(HttpServletResponse.SC_OK);
+
+                                // XML-Ausgabe mit JAXB
+                                // TODO
+
+                                // JSON-Ausgabe
+                                if (format.equals("json")) {
+                                    httpServletResponse.setContentType("application/json;charset=UTF-8");
+                                    httpServletResponse.getWriter().write(listContent);
+                                }
+                            }
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                            }
                         }
 
                         break;

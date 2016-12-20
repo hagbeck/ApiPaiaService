@@ -13,17 +13,18 @@ import java.util.Set;
 @JsonSerialize(include=JsonSerialize.Inclusion.NON_NULL)
 @XmlRootElement(name = "listOfLists")
 public class FavoriteListList {
-    private String patron;
-    private ArrayList<FavoriteList> favoriteLists;
+    // private String patron;
+    private Set<String> favoriteLists;
 
     @XmlElement
-    public ArrayList<FavoriteList> getFavoriteLists() {
+    public Set<String> getFavoriteLists() {
         return favoriteLists;
     }
-    public void setFavoriteLists(ArrayList<FavoriteList> favoriteLists) {
+    public void setFavoriteLists(Set<String> favoriteLists) {
         this.favoriteLists = favoriteLists;
     }
 
+    /*
     @XmlElement
     public String getPatron() {
         return patron;
@@ -31,4 +32,5 @@ public class FavoriteListList {
     public void setPatron(String patron) {
         this.patron = patron;
     }
+    */
 }

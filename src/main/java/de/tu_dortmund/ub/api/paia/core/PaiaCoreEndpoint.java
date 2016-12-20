@@ -136,8 +136,65 @@ public class PaiaCoreEndpoint extends HttpServlet {
      * @param httpServletRequest
      * @param httpServletResponse
      */
-    protected void doDelete(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) {
+    protected void doDelete(HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) throws IOException {
 
+        this.logger.debug("PathInfo = " + httpServletRequest.getPathInfo());
+        this.logger.debug("QueryString = " + httpServletRequest.getQueryString());
+
+        String patronid = "";
+        String service = "";
+        String application = "";
+        String listName = "";
+        String favoriteId = "";
+
+        ObjectMapper mapper = new ObjectMapper();
+
+        Jedis jedis = new Jedis(this.config.getProperty("redis-favorites-server"), Integer.parseInt(this.config.getProperty("redis-favorites-server-port")));
+
+        String path = httpServletRequest.getPathInfo();
+        if (!path.equals(null)) {
+            String[] params = path.substring(1,path.length()).split("/");
+
+            switch (params.length) {
+                case 4:            // ganze Liste löschen
+                    patronid = params[0];
+                    service = params[1];
+                    application = params[2];
+                    listName = params[3];
+
+                    // Einlesen der Konkordanz, die einer Application einen Redis-DB-Index zuordnet
+                    Map<String, Object> concordance = mapper.readValue(new File("conf/concordance.json"), Map.class);
+
+                    int appIndex = Integer.parseInt(String.valueOf(concordance.get(application)));
+
+                    jedis.select(appIndex);
+
+                    if (jedis.hexists(patronid, listName)) {
+                        jedis.hdel(patronid, listName);
+
+                        httpServletResponse.setStatus(HttpServletResponse.SC_NO_CONTENT);
+                    }
+                    else {
+                        httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                    }
+                    break;
+                case 5:            // einzelnen Favoriten löschen
+                    patronid = params[0];
+                    service = params[1];
+                    application = params[2];
+                    listName = params[3];
+                    favoriteId = params[4];
+
+                    // TODO
+
+                    break;
+            }
+        }
+        else {
+            // TODO
+        }
+
+        /* alte Version:
         this.logger.debug("PathInfo = " + httpServletRequest.getPathInfo());
         this.logger.debug("QueryString = " + httpServletRequest.getQueryString());
 
@@ -172,6 +229,7 @@ public class PaiaCoreEndpoint extends HttpServlet {
                 httpServletResponse.setStatus(HttpServletResponse.SC_INTERNAL_SERVER_ERROR);
             }
         }
+        */
     }
 
     /**

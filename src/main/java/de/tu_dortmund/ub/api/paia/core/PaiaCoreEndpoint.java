@@ -209,14 +209,13 @@ public class PaiaCoreEndpoint extends HttpServlet {
                                 for (int i = 0; i < arrayList.size(); i++) {
                                     if (favoriteList.getFavorites().get(i).getRecordid().equals(favoriteId)) {
                                         arrayList.remove(i);
+                                        httpServletResponse.setStatus(HttpServletResponse.SC_NO_CONTENT);
                                     }
                                 }
 
                                 favoriteList.setFavorites(arrayList);
                                 listContent = mapper.writeValueAsString(favoriteList);
                                 jedis.hset(patronid, listName, listContent);
-
-                                httpServletResponse.setStatus(HttpServletResponse.SC_NO_CONTENT);
                             }
                             else {
                                 httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);     // Favoriten nicht gefunden

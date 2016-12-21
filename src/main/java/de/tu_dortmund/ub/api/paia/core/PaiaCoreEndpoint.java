@@ -159,44 +159,72 @@ public class PaiaCoreEndpoint extends HttpServlet {
             String[] params = path.substring(1,path.length()).split("/");
 
             switch (params.length) {
-                case 4:            // ganze Liste löschen
+                // ganze Liste löschen:
+                case 4:
                     patronid = params[0];
                     service = params[1];
                     application = params[2];
                     listName = params[3];
 
-                    int appIndexList = Integer.parseInt(String.valueOf(concordance.get(application)));
+                    if (service.equals("favlist")) {
+                        int appIndexList = Integer.parseInt(String.valueOf(concordance.get(application)));
 
-                    jedis.select(appIndexList);
+                        jedis.select(appIndexList);
 
-                    if (jedis.hexists(patronid, listName)) {
-                        jedis.hdel(patronid, listName);
+                        if (jedis.hexists(patronid, listName)) {
+                            jedis.hdel(patronid, listName);
 
-                        httpServletResponse.setStatus(HttpServletResponse.SC_NO_CONTENT);
-                    }
-                    else {
-                        httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                            httpServletResponse.setStatus(HttpServletResponse.SC_NO_CONTENT);
+                        }
+                        else {
+                            httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                        }
                     }
                     break;
 
-                case 5:            // einzelnen Favoriten löschen
+                // einzelnen Favoriten löschen:
+                case 5:
                     patronid = params[0];
                     service = params[1];
                     application = params[2];
                     listName = params[3];
                     favoriteId = params[4];
 
-                    int appIndexSingleFavorite = Integer.parseInt(String.valueOf(concordance.get(application)));
+                    if (service.equals("favorite")) {
+                        int appIndexSingleFavorite = Integer.parseInt(String.valueOf(concordance.get(application)));
 
-                    jedis.select(appIndexSingleFavorite);
+                        jedis.select(appIndexSingleFavorite);
 
-                    if (jedis.hexists(patronid, listName)) {
-                        String listContent = jedis.hget(patronid, listName);
+                        if (jedis.hexists(patronid, listName)) {
+                            String listContent = jedis.hget(patronid, listName);
+                            FavoriteList favoriteList = mapper.readValue(listContent, FavoriteList.class);
 
-                        // TODO
-                    }
-                    else {
-                        httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);
+                            String[] recordids = new String[favoriteList.getFavorites().size()];
+                            for (int i = 0; i < favoriteList.getFavorites().size(); i++) {
+                                recordids[i] = favoriteList.getFavorites().get(i).getRecordid();
+                            }
+
+                            if (Arrays.asList(recordids).contains(favoriteId)) {
+                                ArrayList<Favorite> arrayList = favoriteList.getFavorites();
+                                for (int i = 0; i < arrayList.size(); i++) {
+                                    if (favoriteList.getFavorites().get(i).getRecordid().equals(favoriteId)) {
+                                        arrayList.remove(i);
+                                    }
+                                }
+
+                                favoriteList.setFavorites(arrayList);
+                                listContent = mapper.writeValueAsString(favoriteList);
+                                jedis.hset(patronid, listName, listContent);
+
+                                httpServletResponse.setStatus(HttpServletResponse.SC_NO_CONTENT);
+                            }
+                            else {
+                                httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);     // Favoriten nicht gefunden
+                            }
+                        }
+                        else {
+                            httpServletResponse.setStatus(HttpServletResponse.SC_NOT_FOUND);         // Liste nicht gefunden
+                        }
                     }
                     break;
             }

@@ -149,6 +149,9 @@ public class PaiaCoreEndpoint extends HttpServlet {
 
         ObjectMapper mapper = new ObjectMapper();
 
+        httpServletResponse.setHeader("Access-Control-Allow-Origin", this.config.getProperty("Access-Control-Allow-Origin"));
+        httpServletResponse.setHeader("Cache-Control", this.config.getProperty("Cache-Control"));
+
         // Einlesen der Konkordanz, die einer Application einen Redis-DB-Index zuordnet
         Map<String, Object> concordance = mapper.readValue(new File("conf/concordance.json"), Map.class);
 

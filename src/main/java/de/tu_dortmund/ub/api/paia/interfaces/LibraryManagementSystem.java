@@ -58,6 +58,8 @@ public interface LibraryManagementSystem {
 
     DocumentList cancel(String patronid, DocumentList documentList) throws LibraryManagementSystemException;
 
+    DocumentList order(String patronid, DocumentList documentList) throws LibraryManagementSystemException;
+
     boolean changePassword(ChangeRequest changeRequest) throws LibraryManagementSystemException;
 
     boolean renewPassword(NewPasswordRequest newPasswordRequest, Patron patron) throws LibraryManagementSystemException;
